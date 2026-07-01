@@ -103,6 +103,10 @@ class FaceEnrollIn(BaseModel):
 class FaceRecognizeIn(BaseModel):
     descriptor: List[float]
 
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
 # ---------- Auth Dependency ----------
 async def current_user(cred: Optional[HTTPAuthorizationCredentials] = Depends(bearer)) -> dict:
     if not cred:
@@ -134,6 +138,42 @@ async def login(payload: LoginIn):
 @api.get("/auth/me")
 async def me(user: dict = Depends(current_user)):
     return user
+
+# ---------- Password policy ----------
+def validate_password_strength(pw: str) -> Optional[str]:
+    """Return None if strong enough, else an error message."""
+    if not pw or len(pw) < 8:
+        return "Password must be at least 8 characters."
+    if len(pw) > 128:
+        return "Password must be at most 128 characters."
+    if pw.strip() != pw:
+        return "Password cannot start or end with whitespace."
+    has_alpha = any(c.isalpha() for c in pw)
+    has_digit = any(c.isdigit() for c in pw)
+    if not (has_alpha and has_digit):
+        return "Password must contain at least one letter and one digit."
+    # reject the well-known seeded defaults
+    if pw.lower() in {"admin123", "student123", "password", "password1", "12345678"}:
+        return "Password is too common. Please choose a stronger one."
+    return None
+
+@api.post("/auth/change-password")
+async def change_password(payload: ChangePasswordIn, user: dict = Depends(current_user)):
+    doc = await db.users.find_one({"id": user["id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not verify_pw(payload.current_password, doc["password"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from the current password")
+    err = validate_password_strength(payload.new_password)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password": hash_pw(payload.new_password), "force_password_change": False}},
+    )
+    return {"ok": True, "message": "Password changed successfully."}
 
 # ---------- Student Routes (Admin) ----------
 @api.get("/students")
@@ -168,6 +208,7 @@ async def create_student(payload: StudentCreate, _: dict = Depends(require_admin
         "password": hash_pw(payload.password),
         "role": "student",
         "name": payload.name,
+        "force_password_change": True,  # newly created students must change their initial password
         "created_at": now_utc().isoformat(),
     }
     await db.students.insert_one(student)
@@ -481,6 +522,7 @@ async def seed():
         "password": hash_pw(admin_pw),
         "role": "admin",
         "name": "System Administrator",
+        "force_password_change": True,
         "created_at": now_utc().isoformat(),
     })
     samples = [
@@ -496,7 +538,9 @@ async def seed():
         })
         await db.users.insert_one({
             "id": sid, "email": s["email"], "password": hash_pw(student_pw),
-            "role": "student", "name": s["name"], "created_at": now_utc().isoformat(),
+            "role": "student", "name": s["name"],
+            "force_password_change": True,
+            "created_at": now_utc().isoformat(),
         })
     log.info("First-run demo seed complete (%d students).", len(samples))
 

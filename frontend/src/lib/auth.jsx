@@ -9,15 +9,21 @@ export function AuthProvider({ children }) {
   });
   const [loading, setLoading] = useState(false);
 
+  const refresh = async () => {
+    const t = localStorage.getItem("sa_token");
+    if (!t) return null;
+    try {
+      const r = await api.get("/auth/me");
+      setUser(r.data);
+      localStorage.setItem("sa_user", JSON.stringify(r.data));
+      return r.data;
+    } catch { return null; }
+  };
+
   useEffect(() => {
     const t = localStorage.getItem("sa_token");
-    if (t && !user) {
-      api.get("/auth/me").then(r => {
-        setUser(r.data);
-        localStorage.setItem("sa_user", JSON.stringify(r.data));
-      }).catch(() => {});
-    }
-  // eslint-disable-next-line
+    if (t) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = async (email, password) => {
@@ -39,7 +45,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ user, login, logout, loading }}>
+    <AuthCtx.Provider value={{ user, login, logout, loading, refresh }}>
       {children}
     </AuthCtx.Provider>
   );

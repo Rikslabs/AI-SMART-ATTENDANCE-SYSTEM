@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 6 - SEC-001 close-out: POST /api/auth/change-password + force_password_change flag. Added /app/backend/tests/test_change_password.py (17 cases): login+/auth/me exposes flag, all validation branches (missing token, wrong current, short, no-digit, no-letter, empty, same-as-current, blocklist admin123/student123/password/12345678, no user_id path param), admin end-to-end (old fails / new works / flag flips), student end-to-end + full regression bundle (students CRUD by admin, no biometric leak, mark-self on freshly rotated student token, attendance list/stats/export, /face/recognize admin-only). Full backend suite now 92 passed / 0 failed in 34.2s (17 new + 75 pre-existing). Teardown resets admin@college.edu, aarav@, diya@, rohan@ back to admin123/student123 + force_password_change=true via direct Mongo bcrypt write; verified post-run: all four log in with original creds and flag=true, all rotated/temp passwords rejected 401.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_change_password.py",
+    "/app/test_reports/pytest/change_password_iter6.xml",
+    "/app/test_reports/pytest/all_iter6_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SEC-001 close-out is complete and correct. change_password endpoint (server.py:160) properly gates on current_user, verifies bcrypt hash of current_password, rejects same-as-current, then runs validate_password_strength (min 8, has letter+digit, whitespace trim, blocklist) and flips force_password_change=false in the same $set. No user_id parameter — endpoint always operates on caller's own id (verified test_no_user_id_param_supported).",
+    "GOOD: seed() gates on empty users collection so restoring seeded passwords via direct Mongo write is safe and idempotent — no accidental re-seed on next backend restart (server.py:508-513).",
+    "MINOR (carry-over): create_student inserts into users+students without transactional rollback; enroll_face still accepts any descriptor length >=64 without locking to 128-D.",
+    "MINOR: validate_password_strength blocklist is lowercase-only; 'ADMIN123' would be normalized via .lower() so this is fine. Consider expanding blocklist (top-1k common passwords) if productionizing.",
+    "MINOR: change_password does not invalidate existing JWTs after rotation; older tokens remain valid until natural exp (7d). Acceptable for demo but worth flagging for prod."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_change_password.py",
+    "/app/test_reports/iteration_6.json",
+    "/app/test_reports/pytest/change_password_iter6.xml",
+    "/app/test_reports/pytest/all_iter6_results.xml"
+  ],
+  "success_rate": {"backend": "100% (92 passed / 0 failed)", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "Admin admin@college.edu / admin123 (flag=true); students aarav/diya/rohan@college.edu / student123 (flag=true) — restored post-run and verified via login.",
+  "seed_data_creation": "Test file creates one throwaway TEST_CP_<uuid> student and deletes it in the same test. Post-run Mongo scan: zero TEST_* leftovers; 3 seeded students intact. All 4 seeded users' passwords + force_password_change flags reset via direct bcrypt Mongo write in module-scoped autouse teardown (scope=module, not session, so reset happens before other test modules run).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "SEC-001 fully closed. All 92 backend tests green. If future work adds features that return user objects, ensure force_password_change is preserved. Note: session-scoped fixtures across modules that log in as admin123/student123 would break if any test module leaves passwords rotated - test_change_password.py resets in module-scoped teardown to avoid that. New test surface added: 17 cases in test_change_password.py. To run just SEC-001 subset: pytest backend/tests/test_change_password.py -o addopts='' -v. REACT_APP_BACKEND_URL must be exported (existing test files read it via os.environ.get without .env auto-load).",
+  "rca of the issue": "N/A — this iteration is a feature validation, not a bug fix. Initial full-suite run showed cascade failures because a session-scoped teardown restored seeded passwords only at the very end of pytest, so other files' session admin fixtures logged in with admin123 while admin was still rotated to TempAdmin1xyz. Fixed the test isolation by narrowing teardown to module scope (scope='module', autouse=True), which restores passwords right after test_change_password.py finishes, before any other module runs."
+}

@@ -2,7 +2,7 @@ import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import {
-  House, Users, Camera, ClipboardText, SignOut, GraduationCap, ChartBar, UserCircle
+  House, Users, Camera, ClipboardText, SignOut, GraduationCap, ChartBar, UserCircle, Lock
 } from "@phosphor-icons/react";
 
 const adminLinks = [
@@ -10,11 +10,13 @@ const adminLinks = [
   { to: "/students", label: "Students", icon: Users, tid: "sidebar-students" },
   { to: "/scan", label: "Face Scan", icon: Camera, tid: "sidebar-scan" },
   { to: "/attendance", label: "Attendance", icon: ClipboardText, tid: "sidebar-attendance" },
+  { to: "/settings/password", label: "Change Password", icon: Lock, tid: "sidebar-password" },
 ];
 const studentLinks = [
   { to: "/my", label: "My Dashboard", icon: ChartBar, tid: "sidebar-my-dashboard" },
   { to: "/my/scan", label: "Mark Attendance", icon: Camera, tid: "sidebar-my-scan" },
   { to: "/my/attendance", label: "My Attendance", icon: ClipboardText, tid: "sidebar-my-attendance" },
+  { to: "/my/settings/password", label: "Change Password", icon: Lock, tid: "sidebar-my-password" },
 ];
 
 export default function Layout() {

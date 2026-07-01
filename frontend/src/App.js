@@ -45,6 +45,7 @@ export default function App() {
             <Route path="/students/:id/enroll" element={<EnrollFace />} />
             <Route path="/scan" element={<ScanPage />} />
             <Route path="/attendance" element={<AttendancePage />} />
+            <Route path="/settings/password" element={<ChangePassword />} />
           </Route>
 
           {/* Student */}
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/my" element={<StudentDashboard />} />
             <Route path="/my/scan" element={<StudentScan />} />
             <Route path="/my/attendance" element={<StudentAttendance />} />
+            <Route path="/my/settings/password" element={<ChangePassword />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
