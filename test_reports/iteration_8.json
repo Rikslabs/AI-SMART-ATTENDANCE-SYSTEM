@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 8 — Full validation of SEC-001 env-driven admin seed (no hard-coded defaults). Wiped-DB baseline confirmed (only 1 admin, 0 students, 0 attendance). Created new comprehensive suite /app/backend/tests/test_sec001_seed_flow.py with 15 tests grouped under a single class (works cleanly under both -n 0 and default -n 2 --dist loadscope). Rewrote /app/backend/tests/conftest.py to (a) drop the stale aarav/diya/rohan reset logic (those users no longer exist), (b) purge TEST_-prefixed students at session teardown, (c) restore admin password to SEED_ADMIN_PASSWORD (ChangeMe#Adm1n2026) + force_password_change=true via direct bcrypt Mongo write so the next iteration starts from the documented state. All 15 tests pass (17s serial, 19s parallel). Post-run verification: admin login with ChangeMe#Adm1n2026 → 200 with force_password_change:true; users=1, students=0, attendance=0.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "N/A (legacy test files)", "issue": "Legacy tests (test_change_password.py, test_force_password_change.py, test_mark_self.py, test_security.py, test_security_audit2.py, backend_test.py) still reference the deleted sample students (aarav/diya/rohan@college.edu / student123). If run they will fail wholesale. They were NOT deleted (main agent may want them for reference) but should be either removed or refactored to create TEST_ students via POST /api/students. Only test_sec001_seed_flow.py was executed this iteration."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_sec001_seed_flow.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/iter8_results.xml",
+    "/app/test_reports/pytest/iter8_parallel.xml"
+  ],
+  "action_items": [
+    "Consider deleting or refactoring the six legacy test files (test_change_password.py, test_force_password_change.py, test_mark_self.py, test_security.py, test_security_audit2.py, backend_test.py) that reference deleted sample students — they will fail if executed against the wiped DB.",
+    "OPTIONAL: /api/students POST default password field still defaults to 'student123' in StudentCreate model (server.py:90). Not a bug per se (validate_password_strength will reject it because 'student123' is on the blocklist), but the default value is misleading and could be removed."
+  ],
+  "critical_code_review_comments": [
+    "SEC-001 seed guard (server.py:521-543) correctly (a) short-circuits when users already exist, (b) raises RuntimeError with the exact documented message when SEED_ADMIN_EMAIL or SEED_ADMIN_PASSWORD is missing, (c) passes the seed password through validate_password_strength and raises RuntimeError('SEED_ADMIN_PASSWORD rejected — ...') for weak values. Verified via subprocess with scratch DB (test_05/06/07).",
+    "No hard-coded defaults remain in the seed logic. Admin is the only account seeded; no sample students are inserted.",
+    "SEC-003: Verified that /api/students (list/get/create/update), /face/recognize, and /face/mark-self all strip face_image and face_descriptor from responses.",
+    "Force-password-change enforcement (active_user + require_admin) works end-to-end for both admin and student roles. Change-password → same token immediately unlocks previously-403 endpoints.",
+    "Impersonation attack surface closed: /face/mark-self matches against ONLY the caller's own descriptor (verified in test_11 — student A submitting student B's descriptor yields no_match).",
+    "MINOR (unchanged from iter 6/7 code review): create_student is not transactional (writes to students then users — if the second insert fails, partial state remains); enroll_face still accepts descriptor length >=64 rather than strictly 128; change_password does not invalidate existing JWTs. None block SEC-001 close-out.",
+    "MINOR: StudentCreate.password default 'student123' (server.py:90) — misleading since the blocklist rejects it. Consider removing the default or setting it to a placeholder that is guaranteed invalid so callers are forced to supply their own."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sec001_seed_flow.py (new — 15 tests covering the entire SEC-001 iteration-8 charter)",
+    "/app/backend/tests/conftest.py (rewritten — removed stale seed-student logic; added admin-state restore + TEST_ student purge at session teardown)"
+  ],
+  "success_rate": {"backend": "100% (15/15 passed under both -n 0 and -n 2 --dist loadscope)", "frontend": "not tested (per request)"},
+  "test_credentials": "Admin: admin@college.edu / ChangeMe#Adm1n2026 (force_password_change:true, restored at teardown). No student credentials are persistent — tests create ephemeral TEST_ students and clean them up.",
+  "seed_data_creation": "No permanent seed data. All ephemeral TEST_ students were purged at session teardown. Post-run Mongo state: users=1 (admin), students=0, attendance=0 — identical to iteration start.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Canonical test file: /app/backend/tests/test_sec001_seed_flow.py (15 tests, all under a single class TestSEC001E2E so xdist loadscope keeps them serial on one worker). Legacy files in /app/backend/tests/ still assume aarav/diya/rohan exist and WILL FAIL — either delete them or refactor to create TEST_ students. Admin state is always restored to SEED_ADMIN_PASSWORD + force_password_change=true at session teardown by conftest.py. The seed-guard tests use a scratch DB name (sec001_scratch_<rand>) via subprocess and drop it at the end.",
+  "rca of the issue": "Not a bug — feature validation of the SEC-001 iteration-8 charter. Verified end-to-end that (i) the admin is seeded only from SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD, (ii) missing or weak seed env vars raise RuntimeError with the exact documented messages, (iii) old hard-coded defaults (admin123, student123, aarav@college.edu) no longer work, (iv) forced-password-change lifecycle for admin + student is unbroken, (v) student-only /face/mark-self prevents impersonation, and (vi) SEC-003 (no biometric fields in responses) still holds."
+}

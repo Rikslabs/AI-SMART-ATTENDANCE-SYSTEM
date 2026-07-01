@@ -515,44 +515,48 @@ async def seed():
     except Exception as e:
         log.warning("Could not create unique attendance index (legacy duplicates?): %s", e)
 
-    # SEC-001: Only seed demo data when the users collection is COMPLETELY EMPTY.
-    # After first run, we never re-create default accounts, even if they were deleted / had passwords changed.
+    # SEC-001: On first startup only, create the admin account from environment variables.
+    # No hard-coded default passwords anywhere. No sample students seeded — admin creates
+    # students manually via the app after signing in and rotating the initial password.
     existing_users = await db.users.count_documents({})
     if existing_users > 0:
-        log.info("Users already exist (%d); skipping demo seed.", existing_users)
+        log.info("Users already exist (%d); skipping first-run admin seed.", existing_users)
         return
 
-    log.warning("First-run detected — seeding demo admin + sample students. Please change these passwords immediately.")
-    admin_pw = os.environ.get("SEED_ADMIN_PASSWORD", "admin123")
-    student_pw = os.environ.get("SEED_STUDENT_PASSWORD", "student123")
+    admin_email = os.environ.get("SEED_ADMIN_EMAIL")
+    admin_pw = os.environ.get("SEED_ADMIN_PASSWORD")
+    if not admin_email or not admin_pw:
+        # Refuse to start with an empty database if no admin credentials are provided.
+        # This prevents the system from ever creating an unauthenticated / default-credential admin.
+        raise RuntimeError(
+            "First-run setup error: SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD environment "
+            "variables must be set before starting the backend with an empty database. "
+            "See backend/.env.example for setup instructions."
+        )
 
+    # Basic sanity on the seed password (same policy as change-password).
+    pw_err = validate_password_strength(admin_pw)
+    if pw_err:
+        raise RuntimeError(
+            f"First-run setup error: SEED_ADMIN_PASSWORD rejected — {pw_err}. "
+            "Choose a strong initial password in your .env file."
+        )
+
+    admin_email = admin_email.strip().lower()
     await db.users.insert_one({
         "id": str(uuid.uuid4()),
-        "email": "admin@college.edu",
+        "email": admin_email,
         "password": hash_pw(admin_pw),
         "role": "admin",
-        "name": "System Administrator",
+        "name": os.environ.get("SEED_ADMIN_NAME", "System Administrator"),
         "force_password_change": True,
         "created_at": now_utc().isoformat(),
     })
-    samples = [
-        {"name": "Aarav Sharma", "roll_number": "BCA2101", "email": "aarav@college.edu", "course": "BCA", "phone": "9876543210"},
-        {"name": "Diya Patel", "roll_number": "BCA2102", "email": "diya@college.edu", "course": "BCA", "phone": "9876543211"},
-        {"name": "Rohan Verma", "roll_number": "BCA2103", "email": "rohan@college.edu", "course": "BCA", "phone": "9876543212"},
-    ]
-    for s in samples:
-        sid = str(uuid.uuid4())
-        await db.students.insert_one({
-            "id": sid, **s, "face_enrolled": False, "face_descriptor": None,
-            "face_image": None, "created_at": now_utc().isoformat(),
-        })
-        await db.users.insert_one({
-            "id": sid, "email": s["email"], "password": hash_pw(student_pw),
-            "role": "student", "name": s["name"],
-            "force_password_change": True,
-            "created_at": now_utc().isoformat(),
-        })
-    log.info("First-run demo seed complete (%d students).", len(samples))
+    log.warning(
+        "First-run detected — created admin '%s'. force_password_change is TRUE; "
+        "log in and rotate the password immediately.",
+        admin_email,
+    )
 
 @app.on_event("shutdown")
 async def shutdown():

@@ -67,3 +67,22 @@ REACT_APP_BACKEND_URL="<your backend URL>"
 - **SEC-002**: `POST /api/face/recognize` now requires **admin role** (`require_admin`). Students can no longer call this endpoint; their only path to attendance is `/api/face/mark-self` which matches against their OWN descriptor only.
 - **SEC-003**: `face_image` (base64 biometric) is no longer returned by `/students/{id}`, `/students` create/update, `/face/recognize`, or `/face/mark-self`. Face descriptors + images are stored and used internally for matching only. Admin ScanPage no longer displays the stored photo.
 - Added unique compound index `(student_id, date)` on `attendance` to make dedupe race-safe; `DuplicateKeyError` is handled gracefully in both `/face/recognize` and `/face/mark-self`.
+
+## Security Hardening #3 — Env-required Admin Seed (2026-07-01, SEC-001 fully closed)
+- **No hard-coded default passwords anywhere in code.**
+- Backend `startup` refuses to boot with an empty DB unless `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` env vars are set. Seed password must pass the same strength rules as `/auth/change-password`.
+- Only the admin is seeded on first boot (no sample students). Admin creates students via `POST /api/students`.
+- `.env.example` added at `/app/backend/.env.example` with full setup docs.
+- Existing dev DB was wiped and re-seeded via the new flow to prove end-to-end.
+- Backend enforcement of `force_password_change` (from Hardening #3 iter) still in place: any protected endpoint returns 403 while flag is true, except `/auth/me` and `/auth/change-password`.
+
+## Setup Instructions (Updated)
+1. `cp /app/backend/.env.example /app/backend/.env`
+2. Edit `/app/backend/.env` and set:
+   - `SEED_ADMIN_EMAIL` (your admin email)
+   - `SEED_ADMIN_PASSWORD` (strong initial password — will be forced to change on first login)
+   - `JWT_SECRET` (random, e.g. `python -c "import secrets;print(secrets.token_urlsafe(48))"`)
+   - `MONGO_URL`, `DB_NAME`
+3. Start backend (`sudo supervisorctl restart backend`).
+4. Open the app, sign in as admin, complete the forced password change.
+5. Use the admin dashboard to create students. Each student gets `force_password_change:true` and must change their initial password on first login.

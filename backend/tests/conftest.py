@@ -1,17 +1,13 @@
 """
-Shared test fixtures & seed-state management.
+Shared test fixtures & admin-state restore (post SEC-001 env-driven seed).
 
-Because SEC-001 seeded users have force_password_change=true by default,
-most protected endpoints return 403 until the flag is cleared. Old tests
-(backend_test.py, test_security.py, test_security_audit2.py, test_mark_self.py)
-assume the flag is false so they can hit /students, /attendance, etc.
+The database was wiped and re-seeded via the env-driven flow. Only the admin
+account exists at session start (email from SEED_ADMIN_EMAIL, password from
+SEED_ADMIN_PASSWORD, force_password_change=True). No sample students exist.
 
-Strategy:
-* Session-scoped autouse fixture clears the flag for all 4 seeded users at
-  session start and resets it back to True at session end.
-* test_change_password.py and test_force_password_change.py override this
-  by setting the flag back to True inside their own module-scoped fixture
-  before their tests run.
+At session teardown we restore the seeded admin's password back to the
+documented .env value and set force_password_change=true again so subsequent
+iterations can continue with the documented credentials.
 """
 import os
 from pathlib import Path
@@ -27,33 +23,42 @@ load_dotenv(Path("/app/frontend/.env"))
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 
-ADMIN_EMAIL = "admin@college.edu"
-ADMIN_PW = "admin123"
-STUDENT_PW = "student123"
-SEED_EMAILS = [
-    ("admin@college.edu", ADMIN_PW),
-    ("aarav@college.edu", STUDENT_PW),
-    ("diya@college.edu", STUDENT_PW),
-    ("rohan@college.edu", STUDENT_PW),
-]
+SEED_ADMIN_EMAIL = os.environ.get("SEED_ADMIN_EMAIL", "admin@college.edu")
+SEED_ADMIN_PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD", "ChangeMe#Adm1n2026")
 
 
-def _reset_seed(db, flag: bool):
-    for email, pw in SEED_EMAILS:
-        pw_hash = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
-        db.users.update_one(
-            {"email": email},
-            {"$set": {"password": pw_hash, "force_password_change": flag}},
-        )
+def _restore_admin(db):
+    """Restore admin to the documented .env password and force_password_change=True."""
+    pw_hash = bcrypt.hashpw(SEED_ADMIN_PASSWORD.encode(), bcrypt.gensalt()).decode()
+    db.users.update_one(
+        {"email": SEED_ADMIN_EMAIL},
+        {"$set": {"password": pw_hash, "force_password_change": True}},
+    )
+
+
+def _cleanup_test_students(db):
+    """Delete any TEST_-prefixed students / users created by tests."""
+    test_students = list(db.students.find({"$or": [
+        {"email": {"$regex": "^test_", "$options": "i"}},
+        {"roll_number": {"$regex": "^TEST", "$options": "i"}},
+        {"name": {"$regex": "^TEST_", "$options": "i"}},
+    ]}, {"id": 1}))
+    for s in test_students:
+        db.users.delete_one({"id": s["id"]})
+        db.attendance.delete_many({"student_id": s["id"]})
+    db.students.delete_many({"$or": [
+        {"email": {"$regex": "^test_", "$options": "i"}},
+        {"roll_number": {"$regex": "^TEST", "$options": "i"}},
+        {"name": {"$regex": "^TEST_", "$options": "i"}},
+    ]})
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _seed_flag_lifecycle():
-    """Clear force_password_change for all seeded users so legacy tests pass,
-    then restore flag=True + original password at session end."""
+def _admin_state_restore_lifecycle():
     client = MongoClient(MONGO_URL)
     db = client[DB_NAME]
-    _reset_seed(db, flag=False)
     yield
-    _reset_seed(db, flag=True)
+    # Teardown: cleanup TEST_ students then restore admin to documented state.
+    _cleanup_test_students(db)
+    _restore_admin(db)
     client.close()
