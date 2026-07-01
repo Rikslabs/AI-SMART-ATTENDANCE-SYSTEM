@@ -9,7 +9,7 @@ export default function StudentForm() {
   const editing = !!id;
   const nav = useNavigate();
   const [f, setF] = useState({
-    name: "", roll_number: "", email: "", course: "BCA", phone: "", password: "student123",
+    name: "", roll_number: "", email: "", course: "BCA", phone: "", password: "",
   });
   const [saving, setSaving] = useState(false);
 

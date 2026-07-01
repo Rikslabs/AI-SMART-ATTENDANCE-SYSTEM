@@ -87,7 +87,7 @@ class StudentCreate(BaseModel):
     email: EmailStr
     course: str
     phone: str
-    password: str = "student123"
+    password: str  # admin-supplied initial password; must pass strength policy
 
 class StudentUpdate(BaseModel):
     name: Optional[str] = None
@@ -199,6 +199,10 @@ async def create_student(payload: StudentCreate, _: dict = Depends(require_admin
         raise HTTPException(status_code=400, detail="Email already registered")
     if await db.students.find_one({"roll_number": payload.roll_number}):
         raise HTTPException(status_code=400, detail="Roll number already exists")
+    # SEC-001: enforce password policy on admin-supplied initial student password.
+    pw_err = validate_password_strength(payload.password)
+    if pw_err:
+        raise HTTPException(status_code=400, detail=f"Initial password rejected: {pw_err}")
     sid = str(uuid.uuid4())
     student = {
         "id": sid,
