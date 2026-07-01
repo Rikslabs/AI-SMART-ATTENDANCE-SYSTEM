@@ -80,7 +80,8 @@ class TestSEC002_FaceRecognizeAuth:
                    headers={"Authorization": "Bearer bogus.jwt.token"}, timeout=20)
         assert r.status_code == 401
 
-    def test_recognize_with_student_token_and_enrolled_descriptor(self, s, admin_headers, student_headers, student_user):
+    def test_recognize_student_token_now_forbidden_admin_still_ok(self, s, admin_headers, student_headers):
+        # SEC-002 (audit #2): /face/recognize is now ADMIN-ONLY. Students must use /face/mark-self.
         # 1) Admin creates a fresh test student
         roll = f"TESTSEC{uuid.uuid4().hex[:6].upper()}"
         email = f"testsec_{uuid.uuid4().hex[:6]}@college.edu"
@@ -91,6 +92,9 @@ class TestSEC002_FaceRecognizeAuth:
                         headers=admin_headers, timeout=20)
         assert create.status_code == 200, create.text
         sid = create.json()["id"]
+        # SEC-003 sanity: create response must NOT include biometric fields
+        assert "face_image" not in create.json()
+        assert "face_descriptor" not in create.json()
 
         # 2) Admin enrolls a fixed 128-D descriptor
         desc = _desc_seq()
@@ -100,30 +104,30 @@ class TestSEC002_FaceRecognizeAuth:
         assert er.json()["face_enrolled"] is True
 
         try:
-            # 3) Student token -> recognize with same descriptor: matched:true
+            # 3) Student token -> recognize now must be 403 (admin-only endpoint)
             r1 = s.post(f"{API}/face/recognize",
                         json={"descriptor": desc},
                         headers=student_headers, timeout=30)
-            assert r1.status_code == 200, r1.text
-            b1 = r1.json()
-            assert b1["matched"] is True
-            assert b1["student"]["id"] == sid
+            assert r1.status_code == 403, r1.text
 
-            # 4) Second call same day -> already_marked:true
-            r2 = s.post(f"{API}/face/recognize",
-                        json={"descriptor": desc},
-                        headers=student_headers, timeout=30)
-            assert r2.status_code == 200
-            b2 = r2.json()
-            assert b2["matched"] is True
-            assert b2["already_marked"] is True
-
-            # 5) Admin token also works
+            # 4) Admin token still works and matches
             r3 = s.post(f"{API}/face/recognize",
                         json={"descriptor": desc},
                         headers=admin_headers, timeout=30)
             assert r3.status_code == 200
-            assert r3.json()["matched"] is True
+            b3 = r3.json()
+            assert b3["matched"] is True
+            assert b3["student"]["id"] == sid
+            # SEC-003: matched student payload must NOT contain face_image
+            assert "face_image" not in b3["student"]
+            assert set(b3["student"].keys()) <= {"id", "name", "roll_number", "course"}
+
+            # 5) Second admin call same day -> already_marked:true (dedupe)
+            r4 = s.post(f"{API}/face/recognize",
+                        json={"descriptor": desc},
+                        headers=admin_headers, timeout=30)
+            assert r4.status_code == 200
+            assert r4.json()["already_marked"] is True
         finally:
             # Cleanup: delete test student (and their attendance rows)
             s.delete(f"{API}/students/{sid}", headers=admin_headers, timeout=20)

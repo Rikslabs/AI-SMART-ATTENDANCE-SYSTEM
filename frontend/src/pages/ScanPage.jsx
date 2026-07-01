@@ -135,13 +135,9 @@ export default function ScanPage() {
           {lastResult?.matched && (
             <div data-testid="scan-last-result" className={`border ${lastResult.already_marked ? "border-[var(--sa-warning)]" : "border-[var(--sa-success)]"} bg-white p-4 rounded-md`}>
               <div className="flex items-center gap-3">
-                {lastResult.student.face_image ? (
-                  <img src={lastResult.student.face_image} alt="face" className="w-14 h-14 rounded-md object-cover border border-[var(--sa-border)]" />
-                ) : (
-                  <div className="w-14 h-14 bg-[var(--sa-primary)] text-white rounded-md flex items-center justify-center font-heading font-bold text-xl">
-                    {lastResult.student.name[0]}
-                  </div>
-                )}
+                <div className="w-14 h-14 bg-[var(--sa-primary)] text-white rounded-md flex items-center justify-center font-heading font-bold text-xl">
+                  {lastResult.student.name[0]}
+                </div>
                 <div className="min-w-0">
                   <div className="font-heading font-semibold truncate">{lastResult.student.name}</div>
                   <div className="font-mono-tech text-[11px] text-[var(--sa-muted)]">{lastResult.student.roll_number} · {lastResult.student.course}</div>

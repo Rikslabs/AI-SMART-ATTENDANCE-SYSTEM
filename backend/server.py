@@ -17,6 +17,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional
 from datetime import datetime, timezone, date, timedelta
+from pymongo.errors import DuplicateKeyError
 import jwt
 import bcrypt
 
@@ -170,7 +171,9 @@ async def create_student(payload: StudentCreate, _: dict = Depends(require_admin
     }
     await db.students.insert_one(student)
     await db.users.insert_one(user_doc)
+    # SEC-003: strip biometric fields + Mongo _id from response
     student.pop("face_descriptor", None)
+    student.pop("face_image", None)
     student.pop("_id", None)
     return student
 
@@ -178,7 +181,8 @@ async def create_student(payload: StudentCreate, _: dict = Depends(require_admin
 async def get_student(sid: str, user: dict = Depends(current_user)):
     if user["role"] == "student" and user["id"] != sid:
         raise HTTPException(status_code=403, detail="Forbidden")
-    s = await db.students.find_one({"id": sid}, {"_id": 0, "face_descriptor": 0})
+    # SEC-003: do not return biometric image or descriptor in normal profile responses
+    s = await db.students.find_one({"id": sid}, {"_id": 0, "face_descriptor": 0, "face_image": 0})
     if not s:
         raise HTTPException(status_code=404, detail="Student not found")
     return s
@@ -199,7 +203,7 @@ async def update_student(sid: str, payload: StudentUpdate, _: dict = Depends(req
     if "name" in update: user_update["name"] = update["name"]
     if user_update:
         await db.users.update_one({"id": sid}, {"$set": user_update})
-    s = await db.students.find_one({"id": sid}, {"_id": 0, "face_descriptor": 0})
+    s = await db.students.find_one({"id": sid}, {"_id": 0, "face_descriptor": 0, "face_image": 0})
     return s
 
 @api.delete("/students/{sid}")
@@ -227,9 +231,9 @@ async def enroll_face(sid: str, payload: FaceEnrollIn, _: dict = Depends(require
         raise HTTPException(status_code=404, detail="Student not found")
     return {"ok": True, "student_id": sid, "face_enrolled": True}
 
-# ---------- Face Recognition ----------
+# ---------- Face Recognition (Admin-only) ----------
 @api.post("/face/recognize")
-async def face_recognize(payload: FaceRecognizeIn, _: dict = Depends(current_user)):
+async def face_recognize(payload: FaceRecognizeIn, _: dict = Depends(require_admin)):
     if len(payload.descriptor) < 64:
         raise HTTPException(status_code=400, detail="Invalid descriptor")
     cursor = db.students.find({"face_enrolled": True}, {"_id": 0})
@@ -245,37 +249,45 @@ async def face_recognize(payload: FaceRecognizeIn, _: dict = Depends(current_use
 
     # Mark attendance (once per day)
     today = now_utc().date().isoformat()
-    existing = await db.attendance.find_one({"student_id": best["id"], "date": today})
-    if existing:
+    student_info = {
+        "id": best["id"], "name": best["name"], "roll_number": best["roll_number"],
+        "course": best["course"],
+    }
+    try:
+        existing = await db.attendance.find_one({"student_id": best["id"], "date": today})
+        if existing:
+            return {
+                "matched": True,
+                "already_marked": True,
+                "student": student_info,
+                "distance": best_dist,
+                "attendance": {"date": today, "time": existing["time"]},
+            }
+        now = now_utc()
+        record = {
+            "id": str(uuid.uuid4()),
+            "student_id": best["id"],
+            "student_name": best["name"],
+            "roll_number": best["roll_number"],
+            "course": best["course"],
+            "date": today,
+            "time": now.isoformat(),
+            "status": "present",
+        }
+        await db.attendance.insert_one(record)
+    except DuplicateKeyError:
+        existing = await db.attendance.find_one({"student_id": best["id"], "date": today})
         return {
             "matched": True,
             "already_marked": True,
-            "student": {
-                "id": best["id"], "name": best["name"], "roll_number": best["roll_number"],
-                "course": best["course"], "face_image": best.get("face_image"),
-            },
+            "student": student_info,
             "distance": best_dist,
-            "attendance": {"date": today, "time": existing["time"]},
+            "attendance": {"date": today, "time": existing["time"] if existing else now_utc().isoformat()},
         }
-    now = now_utc()
-    record = {
-        "id": str(uuid.uuid4()),
-        "student_id": best["id"],
-        "student_name": best["name"],
-        "roll_number": best["roll_number"],
-        "course": best["course"],
-        "date": today,
-        "time": now.isoformat(),
-        "status": "present",
-    }
-    await db.attendance.insert_one(record)
     return {
         "matched": True,
         "already_marked": False,
-        "student": {
-            "id": best["id"], "name": best["name"], "roll_number": best["roll_number"],
-            "course": best["course"], "face_image": best.get("face_image"),
-        },
+        "student": student_info,
         "distance": best_dist,
         "attendance": {"date": today, "time": record["time"]},
     }
@@ -303,28 +315,36 @@ async def face_mark_self(payload: FaceRecognizeIn, user: dict = Depends(current_
                 "message": "Face did not match your registered face. Please try again."}
 
     today = now_utc().date().isoformat()
-    existing = await db.attendance.find_one({"student_id": me["id"], "date": today})
+    # SEC-003: do not include face_image in response
     student_info = {
         "id": me["id"], "name": me["name"], "roll_number": me["roll_number"],
-        "course": me["course"], "face_image": me.get("face_image"),
+        "course": me["course"],
     }
-    if existing:
+    try:
+        existing = await db.attendance.find_one({"student_id": me["id"], "date": today})
+        if existing:
+            return {"matched": True, "already_marked": True, "distance": dist,
+                    "student": student_info,
+                    "attendance": {"date": today, "time": existing["time"]},
+                    "message": "Attendance already marked for today."}
+        now = now_utc()
+        record = {
+            "id": str(uuid.uuid4()),
+            "student_id": me["id"],
+            "student_name": me["name"],
+            "roll_number": me["roll_number"],
+            "course": me["course"],
+            "date": today,
+            "time": now.isoformat(),
+            "status": "present",
+        }
+        await db.attendance.insert_one(record)
+    except DuplicateKeyError:
+        existing = await db.attendance.find_one({"student_id": me["id"], "date": today})
         return {"matched": True, "already_marked": True, "distance": dist,
                 "student": student_info,
-                "attendance": {"date": today, "time": existing["time"]},
+                "attendance": {"date": today, "time": existing["time"] if existing else now_utc().isoformat()},
                 "message": "Attendance already marked for today."}
-    now = now_utc()
-    record = {
-        "id": str(uuid.uuid4()),
-        "student_id": me["id"],
-        "student_name": me["name"],
-        "roll_number": me["roll_number"],
-        "course": me["course"],
-        "date": today,
-        "time": now.isoformat(),
-        "status": "present",
-    }
-    await db.attendance.insert_one(record)
     return {"matched": True, "already_marked": False, "distance": dist,
             "student": student_info,
             "attendance": {"date": today, "time": record["time"]},
@@ -432,39 +452,52 @@ async def seed():
     # Indexes
     await db.users.create_index("email", unique=True)
     await db.students.create_index("roll_number", unique=True)
-    await db.attendance.create_index([("student_id", 1), ("date", 1)])
+    # SEC hardening: unique attendance per (student, day) - prevents duplicate race inserts.
+    # Guard against failure if legacy duplicates exist.
+    try:
+        await db.attendance.create_index(
+            [("student_id", 1), ("date", 1)],
+            unique=True,
+            name="uniq_student_date",
+        )
+    except Exception as e:
+        log.warning("Could not create unique attendance index (legacy duplicates?): %s", e)
 
-    # Seed admin
-    admin_email = "admin@college.edu"
-    if not await db.users.find_one({"email": admin_email}):
-        await db.users.insert_one({
-            "id": str(uuid.uuid4()),
-            "email": admin_email,
-            "password": hash_pw("admin123"),
-            "role": "admin",
-            "name": "System Administrator",
-            "created_at": now_utc().isoformat(),
-        })
-        log.info("Seeded admin: %s / admin123", admin_email)
+    # SEC-001: Only seed demo data when the users collection is COMPLETELY EMPTY.
+    # After first run, we never re-create default accounts, even if they were deleted / had passwords changed.
+    existing_users = await db.users.count_documents({})
+    if existing_users > 0:
+        log.info("Users already exist (%d); skipping demo seed.", existing_users)
+        return
 
-    # Seed sample students (no face enrolled)
+    log.warning("First-run detected — seeding demo admin + sample students. Please change these passwords immediately.")
+    admin_pw = os.environ.get("SEED_ADMIN_PASSWORD", "admin123")
+    student_pw = os.environ.get("SEED_STUDENT_PASSWORD", "student123")
+
+    await db.users.insert_one({
+        "id": str(uuid.uuid4()),
+        "email": "admin@college.edu",
+        "password": hash_pw(admin_pw),
+        "role": "admin",
+        "name": "System Administrator",
+        "created_at": now_utc().isoformat(),
+    })
     samples = [
         {"name": "Aarav Sharma", "roll_number": "BCA2101", "email": "aarav@college.edu", "course": "BCA", "phone": "9876543210"},
         {"name": "Diya Patel", "roll_number": "BCA2102", "email": "diya@college.edu", "course": "BCA", "phone": "9876543211"},
         {"name": "Rohan Verma", "roll_number": "BCA2103", "email": "rohan@college.edu", "course": "BCA", "phone": "9876543212"},
     ]
     for s in samples:
-        if not await db.students.find_one({"roll_number": s["roll_number"]}):
-            sid = str(uuid.uuid4())
-            await db.students.insert_one({
-                "id": sid, **s, "face_enrolled": False, "face_descriptor": None,
-                "face_image": None, "created_at": now_utc().isoformat(),
-            })
-            await db.users.insert_one({
-                "id": sid, "email": s["email"], "password": hash_pw("student123"),
-                "role": "student", "name": s["name"], "created_at": now_utc().isoformat(),
-            })
-    log.info("Startup seed complete.")
+        sid = str(uuid.uuid4())
+        await db.students.insert_one({
+            "id": sid, **s, "face_enrolled": False, "face_descriptor": None,
+            "face_image": None, "created_at": now_utc().isoformat(),
+        })
+        await db.users.insert_one({
+            "id": sid, "email": s["email"], "password": hash_pw(student_pw),
+            "role": "student", "name": s["name"], "created_at": now_utc().isoformat(),
+        })
+    log.info("First-run demo seed complete (%d students).", len(samples))
 
 @app.on_event("shutdown")
 async def shutdown():

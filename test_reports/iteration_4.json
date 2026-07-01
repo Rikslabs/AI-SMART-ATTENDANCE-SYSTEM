@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 4 - Backend validation of Security Audit #2 (SEC-001 data continuity, SEC-002 admin-only /face/recognize, SEC-003 no biometric fields in normal API responses). Added /app/backend/tests/test_security_audit2.py (16 pytest cases) covering: seeded users still exist and can login (SEC-001), /face/recognize returns 401 anon / 403 student / 200 admin with matched student minimal payload + dedupe (SEC-002), /face/mark-self impersonation across two fresh students still yields no_match with zero attendance rows for either party, and explicit ABSENCE of face_image / face_descriptor in list/get/create/update/recognize/mark-self responses (SEC-003). Also fixed the stale test_recognize_with_student_token_and_enrolled_descriptor case in test_security.py to expect 403 for students on /face/recognize. Ran full suite: 74 passed / 1 failed / 1 skipped. The single failure is a REAL SEC-003 leak: GET /api/students (admin list) still returns face_image on every row - the projection at server.py:141 excludes face_descriptor but not face_image. Every other SEC-003 surface (single GET, POST, PUT, /face/recognize, /face/mark-self) correctly strips biometrics. Also cleaned up orphan TEST_* students left in Mongo by prior iterations.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/students", "issue": "SEC-003 regression - list projection at server.py:141 uses {\"_id\":0,\"face_descriptor\":0} but does NOT exclude face_image. Every row in the admin list still returns the full base64 face image. Fix: change projection to {\"_id\":0,\"face_descriptor\":0,\"face_image\":0}. Verified via test_list_students_no_biometric on a freshly enrolled TEST student.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_security_audit2.py",
+    "/app/backend/tests/test_security.py",
+    "/app/backend/tests/test_mark_self.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/security_audit2_results.xml",
+    "/app/test_reports/pytest/all_iter4_results.xml"
+  ],
+  "action_items": [
+    "Fix SEC-003 leak in list_students: add face_image (and ideally face_descriptor is already there) to the projection at /app/backend/server.py line ~141. Suggested: `db.students.find({}, {\"_id\":0,\"face_descriptor\":0,\"face_image\":0})`. Retest with backend/tests/test_security_audit2.py::TestSEC003NoBiometricLeak::test_list_students_no_biometric."
+  ],
+  "critical_code_review_comments": [
+    "SEC-003 miss: GET /api/students list projection omits face_image; every OTHER endpoint (get_student, create_student, update_student, /face/recognize, /face/mark-self) correctly strips it. Single-line fix.",
+    "SEC-001 correctly gated on `existing_users > 0`; seeded admin+3 students verified present and logins still succeed. Nice.",
+    "SEC-002 gate via Depends(require_admin) on /face/recognize verified: 401 anon, 403 student, 200 admin. /face/mark-self correctly matches only against caller's own descriptor - impersonation test with two fresh enrolled students confirmed zero attendance rows for either party.",
+    "Unique compound index attendance(student_id, date) plus DuplicateKeyError catch verified via two same-day calls returning already_marked:true and DB rowcount==1 on both /face/recognize (admin) and /face/mark-self (student).",
+    "MINOR: db.students documents still persist face_image (base64) in Mongo; consider moving to a separate face_vectors collection with strict admin-only access and encrypted-at-rest storage. Storing multi-KB base64 blobs on every student row also inflates list scans.",
+    "MINOR: create_student writes face_image=None initially but a subsequent /students/{id}/face PUTs the base64 back into the same row - this couples PII lifecycle to the main profile row. Non-blocking, architectural note only.",
+    "MINOR (carry-over from iter3): create_student inserts users+students without transactional rollback; /students/{id}/face accepts any descriptor length >=64 without locking to 128 dims."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_audit2.py (NEW - 16 pytest cases covering SEC-001/002/003)",
+    "/app/backend/tests/test_security.py (updated test_recognize_with_student_token_and_enrolled_descriptor -> test_recognize_student_token_now_forbidden_admin_still_ok: student now expects 403, admin path additionally asserts SEC-003 minimal student payload and dedupe)"
+  ],
+  "success_rate": {"backend": "98.7% (74 passed / 1 failed / 1 skipped across 76 tests)", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "Admin admin@college.edu / admin123; students aarav/diya/rohan@college.edu / student123 - loaded from /app/memory/test_credentials.md and verified via SEC-001 continuity tests.",
+  "seed_data_creation": "Tests create throwaway TEST_SA2_*, TEST_IMP_*, TEST_MSOK_*, TEST_S3C_*, TEST_S3U_* students per case, enroll deterministic 128-D descriptors (random.Random(seed).uniform(-1,1)), then DELETE which cascades attendance rows. Prior iteration's orphan test_student1@college.edu was manually cleaned up via API. Post-run DB contains only the 3 seeded students.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After main agent fixes the list_students projection at server.py:141, re-run: pytest backend/tests/test_security_audit2.py -v (should be 16/16 green) and pytest backend/tests/ -v (should be 75 passed / 1 skipped). The single pre-existing skip is TestZCleanup::test_delete_created_student in backend_test.py when xdist splits classes across workers (module-level attribute state doesn't cross workers) - not a regression. Do NOT expect face_image in ANY /api/students* or /api/face/* response after the fix.",
+  "rca of the issue": "SEC-003 partial fix. Main agent updated projections in get_student (line 185) and update_student (line 206), and pops in create_student (line 175-176), but forgot the OLDER endpoint list_students (line 141) which was authored earlier with only `face_descriptor:0`. Reproduction: (1) admin login, (2) POST /students to create TEST_*, (3) POST /students/{id}/face with descriptor and image_base64=\"data:image/png;base64,...\", (4) GET /students - the created row (and any pre-enrolled seeded student that gets a face) contains face_image. Mitigation: add face_image (and defensively face_descriptor - already excluded) to the projection dict on line 141. Same pattern as get_student one-liner."
+}
