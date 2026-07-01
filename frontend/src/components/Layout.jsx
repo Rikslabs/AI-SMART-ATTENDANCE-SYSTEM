@@ -13,6 +13,7 @@ const adminLinks = [
 ];
 const studentLinks = [
   { to: "/my", label: "My Dashboard", icon: ChartBar, tid: "sidebar-my-dashboard" },
+  { to: "/my/scan", label: "Mark Attendance", icon: Camera, tid: "sidebar-my-scan" },
   { to: "/my/attendance", label: "My Attendance", icon: ClipboardText, tid: "sidebar-my-attendance" },
 ];
 

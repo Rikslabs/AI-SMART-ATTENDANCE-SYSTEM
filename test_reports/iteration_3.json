@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 3 - Backend testing of /api/face/mark-self (student-side face self-attendance) plus regression. Added /app/backend/tests/test_mark_self.py with 9 pytest cases covering role gating (401 anonymous, 403 admin, 400 short descriptor), not_enrolled path, happy path with same-day dedupe (verified row count in db), no_match path (verified no row created), cross-user boundary (caller sends another student's descriptor -> no_match, no attendance row for either caller or other student), and a /api/face/recognize regression. Final combined run: 58 passed / 1 pre-existing skip in 11s at REACT_APP_BACKEND_URL.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mark_self.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_security.py",
+    "/app/test_reports/pytest/mark_self_results.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "face_mark_self correctly uses caller's own user['id'] to fetch the enrolled descriptor - impersonation via another student's photo cannot create an attendance row for the target student. Response only ever exposes the caller's own student info. Verified end-to-end.",
+    "Duplicate-prevention uses find_one on (student_id, date=YYYY-MM-DD). GOOD. Consider adding a compound unique index on (student_id, date) for the attendance collection to make this race-safe under concurrent requests; current create_index is non-unique.",
+    "Role gate at line 288 returns 403 for non-student roles (correct) and current_user dep already 401s anonymous - matches spec.",
+    "'not_enrolled' short-circuit returns 200 with matched:false. Correct UX; but consider returning a distinct HTTP 409/412 semantically. Non-blocking.",
+    "Descriptor length check < 64 -> 400. Same pattern as /face/recognize. Consistent.",
+    "MINOR (carry-over): create_student still inserts users before students without transactional rollback; /students/{id}/face stores unbounded floats without dimensionality lock (accepts >=64 length even though production is 128).",
+    "MINOR: /face/mark-self does not log the (student_id, distance, matched) tuple - would help audit but not required."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mark_self.py (NEW - 9 pytest cases, uses fresh students to avoid interference with pre-existing aarav attendance rows)"
+  ],
+  "success_rate": {"backend": "100% (58 passed / 1 pre-existing skip)", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "Admin admin@college.edu / admin123, Students aarav/diya/rohan@college.edu / student123 (from /app/memory/test_credentials.md). New tests do NOT depend on aarav's daily attendance state - they create dedicated TEST_MS_* students per case.",
+  "seed_data_creation": "Each test class creates its own throwaway student(s) via POST /api/students (name/roll/email prefixed TEST_MS_<case>_<hex>), optionally enrolls a deterministic 128-D descriptor (random.Random(seed).uniform(-1,1)), runs the scenario, then DELETEs the student which cascades their attendance rows. No lingering test data expected.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "New endpoint /api/face/mark-self is fully covered in /app/backend/tests/test_mark_self.py. Fixtures 'enrolled_student', 'unenrolled_student', 'other_enrolled_student' are module-scoped and self-cleanup. If you add more mark-self scenarios, prefer creating a fresh student rather than using seeded aarav to avoid same-day duplicate collisions. Note: xdist loadscope splits classes across 2 workers - do NOT use class attributes to pass state between test classes (this is why TestZCleanup skips 'test_delete_created_student' when run in parallel - pre-existing pattern, not a regression).",
+  "rca of the issue": "N/A - no bugs found. Endpoint behavior matches the spec on all 6 scenarios (role gating, not_enrolled, happy path + dedupe, no_match without row creation, cross-user isolation, short-descriptor 400). Regression on /face/recognize also green."
+}

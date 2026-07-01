@@ -280,6 +280,56 @@ async def face_recognize(payload: FaceRecognizeIn, _: dict = Depends(current_use
         "attendance": {"date": today, "time": record["time"]},
     }
 
+# ---------- Student Self-Mark ----------
+@api.post("/face/mark-self")
+async def face_mark_self(payload: FaceRecognizeIn, user: dict = Depends(current_user)):
+    """Student marks their own attendance by matching against ONLY their own enrolled descriptor.
+    Prevents impersonation via other students' photos."""
+    if user.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Only students can self-mark attendance")
+    if len(payload.descriptor) < 64:
+        raise HTTPException(status_code=400, detail="Invalid descriptor")
+
+    me = await db.students.find_one({"id": user["id"]}, {"_id": 0})
+    if not me:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    if not me.get("face_enrolled") or not me.get("face_descriptor"):
+        return {"matched": False, "reason": "not_enrolled",
+                "message": "Your face is not enrolled yet. Please ask the admin to enroll you."}
+
+    dist = euclidean(payload.descriptor, me["face_descriptor"])
+    if dist > FACE_MATCH_THRESHOLD:
+        return {"matched": False, "reason": "no_match", "distance": dist,
+                "message": "Face did not match your registered face. Please try again."}
+
+    today = now_utc().date().isoformat()
+    existing = await db.attendance.find_one({"student_id": me["id"], "date": today})
+    student_info = {
+        "id": me["id"], "name": me["name"], "roll_number": me["roll_number"],
+        "course": me["course"], "face_image": me.get("face_image"),
+    }
+    if existing:
+        return {"matched": True, "already_marked": True, "distance": dist,
+                "student": student_info,
+                "attendance": {"date": today, "time": existing["time"]},
+                "message": "Attendance already marked for today."}
+    now = now_utc()
+    record = {
+        "id": str(uuid.uuid4()),
+        "student_id": me["id"],
+        "student_name": me["name"],
+        "roll_number": me["roll_number"],
+        "course": me["course"],
+        "date": today,
+        "time": now.isoformat(),
+        "status": "present",
+    }
+    await db.attendance.insert_one(record)
+    return {"matched": True, "already_marked": False, "distance": dist,
+            "student": student_info,
+            "attendance": {"date": today, "time": record["time"]},
+            "message": "Attendance marked successfully."}
+
 # ---------- Attendance ----------
 @api.get("/attendance")
 async def list_attendance(

@@ -2,12 +2,14 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { loadFaceModels, detectFaceDescriptor, drawBox } from "@/lib/faceApi";
+import { openCamera, stopStream } from "@/lib/camera";
 import { Camera, CheckCircle, XCircle, Pulse } from "@phosphor-icons/react";
 
 export default function ScanPage() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
+  const streamRef = useRef(null);
   const busy = useRef(false);
   const lastMatchAt = useRef(0);
   const [modelsReady, setModelsReady] = useState(false);
@@ -16,29 +18,35 @@ export default function ScanPage() {
   const [detected, setDetected] = useState(false);
   const [lastResult, setLastResult] = useState(null);
   const [history, setHistory] = useState([]);
+  const [cameraError, setCameraError] = useState(null);
 
   useEffect(() => {
     loadFaceModels().then(() => { setModelsReady(true); setStatus("Models ready. Start scanning."); })
       .catch(() => setStatus("Failed to load models."));
     return () => stop();
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const start = async () => {
+    setCameraError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+      const { stream } = await openCamera({ width: 640, height: 480 });
+      streamRef.current = stream;
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
       setStreaming(true);
       setStatus("Scanning for faces…");
       loop();
-    } catch { toast.error("Camera access denied."); }
+    } catch (e) {
+      setCameraError({ code: e.code, message: e.message });
+      toast.error(e.message || "Camera access failed");
+    }
   };
 
   const stop = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    const v = videoRef.current;
-    if (v && v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
+    stopStream(streamRef.current);
+    streamRef.current = null;
     setStreaming(false);
   };
 
@@ -106,6 +114,15 @@ export default function ScanPage() {
         </div>
 
         <div className="space-y-4">
+          {cameraError && (
+            <div className="p-4 border border-[var(--sa-danger)]/40 bg-[var(--sa-danger)]/10 rounded-md" data-testid="scan-camera-error">
+              <div className="flex items-center gap-2 text-[var(--sa-danger)] font-mono-tech text-[11px] uppercase tracking-widest mb-1">
+                <XCircle size={14} weight="fill" /> {cameraError.code}
+              </div>
+              <div className="text-sm text-[var(--sa-text)]">{cameraError.message}</div>
+              <button onClick={start} className="mt-3 w-full border border-[var(--sa-border)] hover:bg-white py-2 rounded-md text-sm">Retry</button>
+            </div>
+          )}
           {!streaming ? (
             <button data-testid="start-scan-button" onClick={start} disabled={!modelsReady} className="w-full bg-[var(--sa-primary)] hover:bg-[var(--sa-primary-hover)] text-white font-medium py-2.5 rounded-md disabled:opacity-60 flex items-center justify-center gap-2">
               <Camera size={16} weight="bold" /> Start Scanning

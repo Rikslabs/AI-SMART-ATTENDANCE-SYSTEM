@@ -12,6 +12,7 @@ import ScanPage from "@/pages/ScanPage";
 import AttendancePage from "@/pages/Attendance";
 import StudentDashboard from "@/pages/StudentDashboard";
 import StudentAttendance from "@/pages/StudentAttendance";
+import StudentScan from "@/pages/StudentScan";
 
 function ProtectedRoute({ children, role }) {
   const { user } = useAuth();
@@ -49,6 +50,7 @@ export default function App() {
           {/* Student */}
           <Route element={<ProtectedRoute role="student"><Layout /></ProtectedRoute>}>
             <Route path="/my" element={<StudentDashboard />} />
+            <Route path="/my/scan" element={<StudentScan />} />
             <Route path="/my/attendance" element={<StudentAttendance />} />
           </Route>
 

@@ -1,24 +1,52 @@
 import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { ChartBar, Calendar, CheckCircle } from "@phosphor-icons/react";
+import { Calendar, CheckCircle, Camera, ArrowRight, WarningCircle } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 
 export default function StudentDashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
+  const [profile, setProfile] = useState(null);
 
-  useEffect(() => { api.get("/attendance/me/stats").then(r => setStats(r.data)); }, []);
+  useEffect(() => {
+    api.get("/attendance/me/stats").then(r => setStats(r.data));
+    if (user?.id) api.get(`/students/${user.id}`).then(r => setProfile(r.data)).catch(() => {});
+  }, [user?.id]);
 
   const pct = stats?.attendance_percentage || 0;
+  const markedToday = (stats?.recent || []).some(r => r.date === new Date().toISOString().slice(0, 10));
 
   return (
     <div className="space-y-8" data-testid="student-dashboard">
-      <div>
-        <div className="font-mono-tech text-[11px] tracking-[0.2em] uppercase text-[var(--sa-muted)] mb-2">// STUDENT PORTAL</div>
-        <h1 className="font-heading text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold">Welcome, {user?.name?.split(" ")[0]}</h1>
-        <p className="text-sm text-[var(--sa-muted)] mt-1">Your attendance summary and history.</p>
+      <div className="flex items-end justify-between flex-wrap gap-4">
+        <div>
+          <div className="font-mono-tech text-[11px] tracking-[0.2em] uppercase text-[var(--sa-muted)] mb-2">// STUDENT PORTAL</div>
+          <h1 className="font-heading text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold">Welcome, {user?.name?.split(" ")[0]}</h1>
+          <p className="text-sm text-[var(--sa-muted)] mt-1">Your attendance summary and history.</p>
+        </div>
+        <Link
+          to="/my/scan"
+          data-testid="mark-attendance-cta"
+          className={`text-sm font-medium px-5 py-3 rounded-md flex items-center gap-2 transition-all ${
+            markedToday
+              ? "bg-[var(--sa-surface)] text-[var(--sa-muted)] border border-[var(--sa-border)] cursor-default pointer-events-none"
+              : "bg-[var(--sa-primary)] hover:bg-[var(--sa-primary-hover)] text-white"
+          }`}
+        >
+          {markedToday ? (<><CheckCircle size={16} weight="fill" /> Marked for today</>) : (<><Camera size={16} weight="bold" /> Mark Attendance <ArrowRight size={14} weight="bold" /></>)}
+        </Link>
       </div>
+
+      {profile && !profile.face_enrolled && (
+        <div className="p-4 border border-[var(--sa-warning)]/40 bg-[var(--sa-warning)]/10 rounded-md flex items-start gap-3" data-testid="dashboard-not-enrolled">
+          <WarningCircle size={20} className="text-[var(--sa-warning)] shrink-0 mt-0.5" weight="fill" />
+          <div className="text-sm">
+            <div className="font-medium text-[var(--sa-text)]">Face not enrolled yet</div>
+            <div className="text-[var(--sa-muted)]">Please contact your administrator to register your face before you can self-mark attendance.</div>
+          </div>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-3 gap-6">
         <div className="bg-[var(--sa-surface)] border border-[var(--sa-border)] p-6 rounded-md">

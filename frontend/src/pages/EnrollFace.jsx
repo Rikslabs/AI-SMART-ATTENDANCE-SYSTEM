@@ -3,7 +3,8 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { loadFaceModels, detectFaceDescriptor, drawBox, captureFrameAsDataUrl } from "@/lib/faceApi";
-import { Camera, ArrowLeft, CheckCircle } from "@phosphor-icons/react";
+import { openCamera, stopStream } from "@/lib/camera";
+import { Camera, ArrowLeft, CheckCircle, XCircle } from "@phosphor-icons/react";
 
 export default function EnrollFace() {
   const { id } = useParams();
@@ -11,38 +12,43 @@ export default function EnrollFace() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
+  const streamRef = useRef(null);
   const [student, setStudent] = useState(null);
   const [modelsReady, setModelsReady] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [detected, setDetected] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("Loading AI models…");
+  const [cameraError, setCameraError] = useState(null);
 
   useEffect(() => {
     api.get(`/students/${id}`).then(r => setStudent(r.data));
     loadFaceModels().then(() => { setModelsReady(true); setStatus("Models ready. Start camera to begin."); })
       .catch(() => setStatus("Failed to load models. Refresh."));
     return () => stop();
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const start = async () => {
+    setCameraError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+      const { stream } = await openCamera({ width: 640, height: 480 });
+      streamRef.current = stream;
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
       setStreaming(true);
       setStatus("Position face inside the frame…");
       loop();
     } catch (e) {
-      toast.error("Cannot access camera. Grant permission.");
+      setCameraError({ code: e.code, message: e.message });
+      toast.error(e.message || "Cannot access camera");
     }
   };
 
   const stop = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    const v = videoRef.current;
-    if (v && v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
+    stopStream(streamRef.current);
+    streamRef.current = null;
     setStreaming(false);
   };
 
@@ -98,6 +104,15 @@ export default function EnrollFace() {
           </div>
         </div>
         <div className="space-y-3">
+          {cameraError && (
+            <div className="p-4 border border-[var(--sa-danger)]/40 bg-[var(--sa-danger)]/10 rounded-md" data-testid="enroll-camera-error">
+              <div className="flex items-center gap-2 text-[var(--sa-danger)] font-mono-tech text-[11px] uppercase tracking-widest mb-1">
+                <XCircle size={14} weight="fill" /> {cameraError.code}
+              </div>
+              <div className="text-sm text-[var(--sa-text)]">{cameraError.message}</div>
+              <button onClick={start} className="mt-3 w-full border border-[var(--sa-border)] hover:bg-white py-2 rounded-md text-sm">Retry</button>
+            </div>
+          )}
           {!streaming ? (
             <button data-testid="start-camera-button" onClick={start} disabled={!modelsReady} className="w-full bg-[var(--sa-primary)] hover:bg-[var(--sa-primary-hover)] text-white font-medium py-2.5 rounded-md disabled:opacity-60 flex items-center justify-center gap-2">
               <Camera size={16} weight="bold" /> Start Camera
