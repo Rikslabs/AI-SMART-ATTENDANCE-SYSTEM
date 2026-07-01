@@ -120,7 +120,17 @@ async def current_user(cred: Optional[HTTPAuthorizationCredentials] = Depends(be
         raise HTTPException(status_code=401, detail="User not found")
     return user
 
-async def require_admin(user: dict = Depends(current_user)) -> dict:
+async def active_user(user: dict = Depends(current_user)) -> dict:
+    """SEC-001: Block all API access while the user has a pending forced password change.
+    Only /auth/me and /auth/change-password use `current_user` directly to bypass this gate."""
+    if user.get("force_password_change"):
+        raise HTTPException(
+            status_code=403,
+            detail="Password change required. Please change your password before continuing.",
+        )
+    return user
+
+async def require_admin(user: dict = Depends(active_user)) -> dict:
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     return user
@@ -220,7 +230,7 @@ async def create_student(payload: StudentCreate, _: dict = Depends(require_admin
     return student
 
 @api.get("/students/{sid}")
-async def get_student(sid: str, user: dict = Depends(current_user)):
+async def get_student(sid: str, user: dict = Depends(active_user)):
     if user["role"] == "student" and user["id"] != sid:
         raise HTTPException(status_code=403, detail="Forbidden")
     # SEC-003: do not return biometric image or descriptor in normal profile responses
@@ -336,7 +346,7 @@ async def face_recognize(payload: FaceRecognizeIn, _: dict = Depends(require_adm
 
 # ---------- Student Self-Mark ----------
 @api.post("/face/mark-self")
-async def face_mark_self(payload: FaceRecognizeIn, user: dict = Depends(current_user)):
+async def face_mark_self(payload: FaceRecognizeIn, user: dict = Depends(active_user)):
     """Student marks their own attendance by matching against ONLY their own enrolled descriptor.
     Prevents impersonation via other students' photos."""
     if user.get("role") != "student":
@@ -395,7 +405,7 @@ async def face_mark_self(payload: FaceRecognizeIn, user: dict = Depends(current_
 # ---------- Attendance ----------
 @api.get("/attendance")
 async def list_attendance(
-    user: dict = Depends(current_user),
+    user: dict = Depends(active_user),
     date_filter: Optional[str] = Query(None, alias="date"),
     month: Optional[str] = Query(None, description="YYYY-MM"),
     student_id: Optional[str] = None,
@@ -447,7 +457,7 @@ async def attendance_stats(_: dict = Depends(require_admin)):
     }
 
 @api.get("/attendance/me/stats")
-async def my_stats(user: dict = Depends(current_user)):
+async def my_stats(user: dict = Depends(active_user)):
     if user["role"] != "student":
         raise HTTPException(status_code=403, detail="Student only")
     total = await db.attendance.count_documents({"student_id": user["id"]})

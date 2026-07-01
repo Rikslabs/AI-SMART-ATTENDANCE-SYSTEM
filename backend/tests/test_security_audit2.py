@@ -12,6 +12,18 @@ import random
 import pytest
 import requests
 from datetime import datetime, timezone
+from pymongo import MongoClient
+from dotenv import load_dotenv
+from pathlib import Path
+
+load_dotenv(Path("/app/backend/.env"))
+_mongo_client = MongoClient(os.environ["MONGO_URL"])
+_mongo_db = _mongo_client[os.environ["DB_NAME"]]
+
+
+def _clear_force_flag(email: str):
+    _mongo_db.users.update_one({"email": email}, {"$set": {"force_password_change": False}})
+
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 API = f"{BASE_URL}/api"
@@ -160,6 +172,7 @@ class TestSEC002MarkSelfImpersonation:
         assert s1_body.status_code == 200
         s1_id = s1_body.json()["id"]
         s1_email = s1_body.json()["email"]
+        _clear_force_flag(s1_email)
         d1 = _rand_desc(seed=6001)
         s.post(f"{API}/students/{s1_id}/face", json={"descriptor": d1}, headers=admin_h, timeout=20)
 
@@ -207,6 +220,7 @@ class TestSEC002MarkSelfImpersonation:
         assert cr.status_code == 200
         sid = cr.json()["id"]
         email = cr.json()["email"]
+        _clear_force_flag(email)
         _assert_no_biometric(cr.json(), "POST /students response")
         desc = _rand_desc(seed=6011)
         s.post(f"{API}/students/{sid}/face", json={"descriptor": desc}, headers=admin_h, timeout=20)

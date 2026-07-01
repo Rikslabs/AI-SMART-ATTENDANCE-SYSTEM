@@ -13,10 +13,12 @@ import AttendancePage from "@/pages/Attendance";
 import StudentDashboard from "@/pages/StudentDashboard";
 import StudentAttendance from "@/pages/StudentAttendance";
 import StudentScan from "@/pages/StudentScan";
+import ChangePassword from "@/pages/ChangePassword";
 
 function ProtectedRoute({ children, role }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
+  if (user.force_password_change) return <ChangePassword forced />;
   if (role && user.role !== role) return <Navigate to={user.role === "admin" ? "/dashboard" : "/my"} replace />;
   return children;
 }

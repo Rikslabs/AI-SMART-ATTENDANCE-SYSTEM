@@ -58,21 +58,29 @@ def _auth_header(tok):
     return {"Authorization": f"Bearer {tok}"}
 
 
-@pytest.fixture(scope="module", autouse=True)
-def restore_seed_after_all(mongo):
-    """Guarantee seed reset regardless of pass/fail."""
-    yield
+def _seed_reset(mongo, flag: bool):
     reset_hash_admin = bcrypt.hashpw(ADMIN_PW.encode(), bcrypt.gensalt()).decode()
     reset_hash_stu = bcrypt.hashpw(STUDENT_PW.encode(), bcrypt.gensalt()).decode()
     mongo.users.update_one(
         {"email": ADMIN_EMAIL},
-        {"$set": {"password": reset_hash_admin, "force_password_change": True}},
+        {"$set": {"password": reset_hash_admin, "force_password_change": flag}},
     )
     for e in [STUDENT_EMAIL] + OTHER_EMAILS:
         mongo.users.update_one(
             {"email": e},
-            {"$set": {"password": reset_hash_stu, "force_password_change": True}},
+            {"$set": {"password": reset_hash_stu, "force_password_change": flag}},
         )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def restore_seed_after_all(mongo):
+    """Flag=true before this module runs (so tests observe it). After the
+    module, restore passwords and reset flag=false so downstream test modules
+    (which assume clear state) can hit protected endpoints. Session-scoped
+    conftest fixture will finally flip flag back to true at the end of the run."""
+    _seed_reset(mongo, flag=True)
+    yield
+    _seed_reset(mongo, flag=False)
 
 
 # ---------------- Login exposes force_password_change ----------------

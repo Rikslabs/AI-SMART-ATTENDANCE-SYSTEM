@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 7 — SEC-001 backend-level enforcement of force_password_change validated. Added /app/backend/tests/test_force_password_change.py (21 cases) covering: (a) admin blocked with 403+'password change required' on GET/POST/PUT/DELETE /students, POST /students/{id}/face, POST /face/recognize, GET /attendance, /attendance/stats, /attendance/export; (b) student blocked on GET /attendance, /attendance/me/stats, GET /students/{own_id}, POST /face/mark-self; (c) /auth/me + /auth/change-password remain reachable while flag=true for BOTH roles; (d) /auth/login still reachable (unauthenticated); (e) after successful change-password, the SAME token immediately unlocks previously blocked endpoints (verified admin→GET /students=200 and student→GET /attendance/me/stats=200). Full backend suite = 113 passed / 0 failed under `pytest -n 0`. Also verified error detail string contains 'Password change required' (case-insensitive) so frontend interceptor can key off it.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "N/A (test infra)", "issue": "Default parallel mode `-n 2 --dist loadscope` (per pytest.ini) races on the shared force_password_change flag when test_force_password_change.py / test_change_password.py run concurrently with modules that need flag=false. Serial `-n 0` (also documented as supported in pytest.ini) yields deterministic 113/113 pass. This is a test-harness limitation, NOT a product bug. Options for main agent: (i) accept `-n 0` as the canonical run mode, (ii) refactor SEC-001 tests to operate on throwaway users created directly in Mongo instead of toggling seeded users, or (iii) allow updating addopts to `--dist loadfile` grouping."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_force_password_change.py",
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_change_password.py",
+    "/app/backend/tests/test_mark_self.py",
+    "/app/backend/tests/test_security_audit2.py",
+    "/app/test_reports/pytest/iter7_results.xml"
+  ],
+  "action_items": [
+    "Consider refactoring SEC-001-flag tests to use throwaway users (created via direct Mongo insert with flag=true and unique emails) so parallel `-n 2 --dist loadscope` execution stays race-free.",
+    "OPTIONAL: pytest.ini `addopts` could be updated to `--dist loadfile` (still parallel, but grouped per-file so no file-level flag races) — currently forbidden by the file's own note. Main agent to decide."
+  ],
+  "critical_code_review_comments": [
+    "SEC-001 backend fix is correct. active_user dependency (server.py:123-131) raises 403 with 'Password change required...' whenever user.force_password_change is truthy. require_admin (server.py:133) now chains through active_user, so admin-only endpoints inherit the gate. Migrated endpoints (get_student, face_mark_self, list_attendance, my_stats) all use Depends(active_user) — verified via black-box 403s in all 21 new tests.",
+    "Correctly exempted: /auth/me (server.py:148) and /auth/change-password (server.py:170) both still Depends(current_user), so users can complete the forced-change flow. Verified live: both return 200 (or 400 for validation) while flag=true.",
+    "/auth/login is unauthenticated and thus not gated — verified explicitly.",
+    "The 403 detail message 'Password change required. Please change your password before continuing.' contains the substring 'password change required' (case-insensitive) which matches the axios interceptor contract mentioned in api.js.",
+    "MINOR carry-over (unchanged from iter 6): create_student writes users+students without transactional rollback; enroll_face still accepts descriptor length >=64 (not strictly 128); change_password does not invalidate existing JWTs. None block SEC-001 close-out."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (new — session-scoped seed-flag lifecycle)",
+    "/app/backend/tests/test_force_password_change.py (new — 21 SEC-001 enforcement cases)",
+    "/app/backend/tests/test_change_password.py (module fixture now sets flag=true at start, flag=false after — session teardown restores flag=true)",
+    "/app/backend/tests/test_mark_self.py (added _clear_force_flag helper called in _mk_student so throwaway students bypass gate)",
+    "/app/backend/tests/test_security_audit2.py (added _clear_force_flag calls after impersonation-suite student creations)",
+    "/app/test_reports/pytest/iter7_results.xml"
+  ],
+  "success_rate": {"backend": "100% (113 passed / 0 failed under -n 0)", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "Admin admin@college.edu / admin123 (flag=true post-run, verified); students aarav/diya/rohan@college.edu / student123 (flag=true post-run, verified). All 4 users' passwords + force_password_change reset via direct bcrypt Mongo write in session-scoped conftest teardown.",
+  "seed_data_creation": "No permanent seed data added. Verified post-run: 0 TEST_ leftover students/users (one abandoned TEST_ record from an aborted parallel-mode run was cleaned via direct Mongo delete). 3 seeded students (BCA2101/2102/2103) + admin intact with flag=true.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "SEC-001 backend enforcement fully validated. Canonical run command: `REACT_APP_BACKEND_URL=<url> pytest /app/backend/tests/ -n 0 --junitxml=<xml>`. Default `-n 2 --dist loadscope` mode (per pytest.ini) races because test_force_password_change.py + test_change_password.py toggle the seeded users' force_password_change flag between true/false and other modules assume flag=false — see 'minor' backend issue. New surface: 21 tests in test_force_password_change.py. Legacy modules touched only to unblock parallel execution (added _clear_force_flag Mongo writes after student creation).",
+  "rca of the issue": "Not a bug fix — feature validation of SEC-001 backend enforcement. Pre-fix, the force_password_change flag was enforced client-side only and could be bypassed via direct API calls. Fix: server.py added `active_user` dependency (line 123-131) that raises 403 when flag is true. require_admin now depends on active_user. All protected endpoints except /auth/me and /auth/change-password migrated to Depends(active_user). Frontend interceptor keys off the 'password change required' substring in the 403 detail. Verified end-to-end: admin/student blocked from every protected endpoint while flag=true, /auth/me + /auth/change-password + /auth/login remain reachable, and change-password call clears the flag so the SAME token immediately unlocks previously blocked endpoints."
+}

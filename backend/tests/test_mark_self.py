@@ -19,6 +19,20 @@ import uuid
 import random
 import pytest
 import requests
+from pymongo import MongoClient
+from dotenv import load_dotenv
+from pathlib import Path
+
+load_dotenv(Path("/app/backend/.env"))
+_mongo_client = MongoClient(os.environ["MONGO_URL"])
+_mongo_db = _mongo_client[os.environ["DB_NAME"]]
+
+
+def _clear_force_flag(email: str):
+    """SEC-001: new users created via /students set force_password_change=true.
+    Clear it so this test module (which pre-dates the gate) can call protected
+    endpoints as the freshly created student."""
+    _mongo_db.users.update_one({"email": email}, {"$set": {"force_password_change": False}})
 
 def _load_backend_url():
     # Prefer env var, fall back to frontend/.env (same as prior test files)
@@ -66,6 +80,7 @@ def _mk_student(sess, admin_h, prefix):
     r = sess.post(f"{API}/students", json=payload, headers=admin_h, timeout=20)
     assert r.status_code == 200, r.text
     body = r.json()
+    _clear_force_flag(body["email"])
     return body["id"], body["email"], body["roll_number"]
 
 
