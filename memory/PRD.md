@@ -61,3 +61,9 @@ Frontend `frontend/.env`:
 ```
 REACT_APP_BACKEND_URL="<your backend URL>"
 ```
+
+## Security Hardening #2 (2026-07-01)
+- **SEC-001**: Startup seeding only runs when `users` collection is COMPLETELY empty. Demo admin/students are NOT auto-recreated on subsequent restarts, even if deleted. Optional overrides `SEED_ADMIN_PASSWORD` and `SEED_STUDENT_PASSWORD` env vars for the first-run only.
+- **SEC-002**: `POST /api/face/recognize` now requires **admin role** (`require_admin`). Students can no longer call this endpoint; their only path to attendance is `/api/face/mark-self` which matches against their OWN descriptor only.
+- **SEC-003**: `face_image` (base64 biometric) is no longer returned by `/students/{id}`, `/students` create/update, `/face/recognize`, or `/face/mark-self`. Face descriptors + images are stored and used internally for matching only. Admin ScanPage no longer displays the stored photo.
+- Added unique compound index `(student_id, date)` on `attendance` to make dedupe race-safe; `DuplicateKeyError` is handled gracefully in both `/face/recognize` and `/face/mark-self`.

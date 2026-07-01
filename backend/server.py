@@ -138,7 +138,8 @@ async def me(user: dict = Depends(current_user)):
 # ---------- Student Routes (Admin) ----------
 @api.get("/students")
 async def list_students(_: dict = Depends(require_admin)):
-    students = await db.students.find({}, {"_id": 0, "face_descriptor": 0}).sort("created_at", -1).to_list(1000)
+    # SEC-003: strip biometric data from list responses
+    students = await db.students.find({}, {"_id": 0, "face_descriptor": 0, "face_image": 0}).sort("created_at", -1).to_list(1000)
     return students
 
 @api.post("/students")
