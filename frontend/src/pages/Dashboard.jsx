@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Users, ClipboardText, ChartBar, IdentificationBadge, ArrowRight } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
+import OnboardingCard from "@/components/OnboardingCard";
 
 function StatCard({ label, value, icon: Icon, hint, tid }) {
   return (
@@ -52,6 +53,8 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      <OnboardingCard />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard tid="stat-total-students" label="Total Students" value={stats?.total_students ?? "–"} icon={Users} hint="Registered in system" />

@@ -185,6 +185,60 @@ async def change_password(payload: ChangePasswordIn, user: dict = Depends(curren
     )
     return {"ok": True, "message": "Password changed successfully."}
 
+# ---------- Onboarding (Admin) ----------
+ONBOARDING_STEPS = [
+    ("add_student", "Add your first student"),
+    ("enroll_face", "Enroll a student face"),
+    ("visit_scan", "Open the face scanner"),
+    ("first_attendance", "Mark first attendance"),
+    ("visit_report", "View attendance report"),
+]
+_VISIT_KEYS = {"visit_scan", "visit_report"}
+
+class OnboardingVisitIn(BaseModel):
+    step: str
+
+async def _build_onboarding_status(admin_id: str, admin_doc: dict) -> dict:
+    dismissed = bool(admin_doc.get("onboarding_dismissed"))
+    visited_scan = bool(admin_doc.get("onboarding_visited_scan"))
+    visited_report = bool(admin_doc.get("onboarding_visited_report"))
+    students_count = await db.students.count_documents({})
+    enrolled_count = await db.students.count_documents({"face_enrolled": True})
+    attendance_count = await db.attendance.count_documents({})
+    state = {
+        "add_student": students_count > 0,
+        "enroll_face": enrolled_count > 0,
+        "visit_scan": visited_scan,
+        "first_attendance": attendance_count > 0,
+        "visit_report": visited_report,
+    }
+    steps = [{"key": k, "label": lbl, "done": state[k]} for k, lbl in ONBOARDING_STEPS]
+    completed = sum(1 for s in steps if s["done"])
+    # Auto-dismiss once fully complete so we never show it again
+    if completed == len(steps) and not dismissed:
+        await db.users.update_one({"id": admin_id}, {"$set": {"onboarding_dismissed": True}})
+        dismissed = True
+    return {"dismissed": dismissed, "steps": steps, "completed": completed, "total": len(steps)}
+
+@api.get("/onboarding/status")
+async def onboarding_status(user: dict = Depends(require_admin)):
+    doc = await db.users.find_one({"id": user["id"]}) or {}
+    return await _build_onboarding_status(user["id"], doc)
+
+@api.post("/onboarding/visit")
+async def onboarding_visit(payload: OnboardingVisitIn, user: dict = Depends(require_admin)):
+    if payload.step not in _VISIT_KEYS:
+        raise HTTPException(status_code=400, detail="Unknown onboarding step")
+    field = "onboarding_visited_scan" if payload.step == "visit_scan" else "onboarding_visited_report"
+    await db.users.update_one({"id": user["id"]}, {"$set": {field: True}})
+    doc = await db.users.find_one({"id": user["id"]}) or {}
+    return await _build_onboarding_status(user["id"], doc)
+
+@api.post("/onboarding/dismiss")
+async def onboarding_dismiss(user: dict = Depends(require_admin)):
+    await db.users.update_one({"id": user["id"]}, {"$set": {"onboarding_dismissed": True}})
+    return {"ok": True}
+
 # ---------- Student Routes (Admin) ----------
 @api.get("/students")
 async def list_students(_: dict = Depends(require_admin)):

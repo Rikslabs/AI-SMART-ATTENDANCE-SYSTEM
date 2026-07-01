@@ -32,24 +32,31 @@ def _restore_admin(db):
     pw_hash = bcrypt.hashpw(SEED_ADMIN_PASSWORD.encode(), bcrypt.gensalt()).decode()
     db.users.update_one(
         {"email": SEED_ADMIN_EMAIL},
-        {"$set": {"password": pw_hash, "force_password_change": True}},
+        {
+            "$set": {"password": pw_hash, "force_password_change": True},
+            "$unset": {
+                "onboarding_dismissed": "",
+                "onboarding_visited_scan": "",
+                "onboarding_visited_report": "",
+            },
+        },
     )
 
 
 def _cleanup_test_students(db):
     """Delete any TEST_-prefixed students / users created by tests."""
     test_students = list(db.students.find({"$or": [
-        {"email": {"$regex": "^test_", "$options": "i"}},
-        {"roll_number": {"$regex": "^TEST", "$options": "i"}},
-        {"name": {"$regex": "^TEST_", "$options": "i"}},
+        {"email": {"$regex": "^(test_|onb_)", "$options": "i"}},
+        {"roll_number": {"$regex": "^(TEST|ONB)", "$options": "i"}},
+        {"name": {"$regex": "^(TEST_|ONB_)", "$options": "i"}},
     ]}, {"id": 1}))
     for s in test_students:
         db.users.delete_one({"id": s["id"]})
         db.attendance.delete_many({"student_id": s["id"]})
     db.students.delete_many({"$or": [
-        {"email": {"$regex": "^test_", "$options": "i"}},
-        {"roll_number": {"$regex": "^TEST", "$options": "i"}},
-        {"name": {"$regex": "^TEST_", "$options": "i"}},
+        {"email": {"$regex": "^(test_|onb_)", "$options": "i"}},
+        {"roll_number": {"$regex": "^(TEST|ONB)", "$options": "i"}},
+        {"name": {"$regex": "^(TEST_|ONB_)", "$options": "i"}},
     ]})
 
 

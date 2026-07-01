@@ -23,6 +23,8 @@ export default function ScanPage() {
   useEffect(() => {
     loadFaceModels().then(() => { setModelsReady(true); setStatus("Models ready. Start scanning."); })
       .catch(() => setStatus("Failed to load models."));
+    // Onboarding: mark scanner as visited (admin only endpoint; safe to ignore errors)
+    api.post("/onboarding/visit", { step: "visit_scan" }).catch(() => {});
     return () => stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

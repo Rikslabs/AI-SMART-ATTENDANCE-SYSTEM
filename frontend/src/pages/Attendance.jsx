@@ -25,6 +25,11 @@ export default function AttendancePage() {
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [mode, date, month]);
 
+  useEffect(() => {
+    // Onboarding: mark attendance report as visited (admin-only endpoint; safe to ignore errors)
+    api.post("/onboarding/visit", { step: "visit_report" }).catch(() => {});
+  }, []);
+
   const doSearch = (e) => { e.preventDefault(); load(); };
 
   const exportCsv = async () => {

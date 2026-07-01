@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 9 — Validated the new admin 'Getting Started' onboarding checklist (5 steps: add_student, enroll_face, visit_scan, first_attendance, visit_report). Added /app/backend/tests/test_onboarding.py with 13 tests under a single class TestOnboardingE2E. Extended /app/backend/tests/conftest.py to also $unset onboarding_dismissed / onboarding_visited_scan / onboarding_visited_report at session teardown and to purge ONB_-prefixed data. All 13 onboarding tests pass in 9.4s under `-n 0`. Existing SEC-001 suite still passes (14/15 clean; one intermittent network timeout on test_11 that passes on retry — unrelated to this iteration). Post-run Mongo state confirmed clean: admin=1, students=0, attendance=0, admin doc has force_password_change=True and no onboarding_* fields; login with ChangeMe#Adm1n2026 returns 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "N/A (test infra)", "issue": "pytest.ini forces `-n 2 --dist loadscope`. test_onboarding.py and test_sec001_seed_flow.py both rotate the shared admin password/state, so running them together in parallel with two workers races the admin doc and produces spurious failures. Each file passes cleanly on its own or under `-n 0`. Recommendation: keep the two suites in separate CI invocations OR merge them under one class file so loadscope pins everything to one worker."},
+      {"endpoint": "/api/onboarding/status", "issue": "Auto-dismiss is triggered inside GET (not idempotent from a HTTP-semantic perspective — a GET mutates state on first 100% read). Works per spec but a state-changing GET is a minor code-smell; consider moving to a POST /onboarding/refresh or firing on the last-step completion path."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_onboarding.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/iter9_onboarding_serial.xml",
+    "/app/test_reports/pytest/iter9_sec001_serial.xml"
+  ],
+  "action_items": [
+    "Optional: Move onboarding auto-dismiss out of the GET handler (state-mutating GET). Purely stylistic — current behaviour matches the spec.",
+    "Optional: If both test files are to be executed in one pytest invocation, either merge them into a single class or add file-level serialization (they both mutate the singleton admin doc)."
+  ],
+  "critical_code_review_comments": [
+    "Onboarding endpoints (server.py:188-240) correctly guard with require_admin (which internally chains active_user → force_password_change gate). Verified 401 for anonymous, 403 for student token, and 403 for admin with force_password_change=true.",
+    "Step computation is fully dynamic against Mongo counts (students.count_documents({}), students.count_documents({face_enrolled:true}), attendance.count_documents({})) — no denormalized flags to drift. add_student, enroll_face, and first_attendance therefore auto-complete on any downstream write regardless of who did it.",
+    "Auto-dismiss inside /onboarding/status writes back {onboarding_dismissed: true} only when completed==total AND not already dismissed. Verified idempotent and persisted across subsequent GETs.",
+    "POST /onboarding/visit rejects any step outside {visit_scan, visit_report} with 400. Verified.",
+    "POST /onboarding/dismiss is idempotent and returns {ok: true}. Verified calling it twice.",
+    "SEC-003 regression preserved: /api/students list/get/create/update and /api/face/recognize do not leak face_image or face_descriptor. Verified.",
+    "/api/face/recognize remains admin-only (403 for student tokens). Verified.",
+    "Force-password-change gate remains active on /onboarding/status. Verified 403 pre-rotation, 200 post-rotation using the SAME token.",
+    "MINOR (unchanged from iter 6-8): create_student is still non-transactional; enroll_face still accepts descriptor len >=64 rather than strictly 128 (though the docs/spec say 128-D); change_password does not invalidate existing JWTs. None block iteration 9."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_onboarding.py (new — 13 tests under TestOnboardingE2E)",
+    "/app/backend/tests/conftest.py (extended — teardown now $unset the three onboarding_* fields and purges ONB_ students in addition to TEST_)"
+  ],
+  "success_rate": {"backend": "100% (13/13 onboarding + 14/15 sec001 with a single flaky network timeout on retry-pass)", "frontend": "not tested (per request)"},
+  "test_credentials": "Admin: admin@college.edu / ChangeMe#Adm1n2026 (force_password_change:true, restored at teardown). Test rotates to 'AdminRotated1!' for the session then restores. No student credentials persist — ONB_ students created ephemerally and purged.",
+  "seed_data_creation": "No permanent seed data. Ephemeral ONB_ students created and purged. Post-run Mongo state verified: users=1 (admin), students=0, attendance=0; admin has force_password_change=true and no onboarding_* fields.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Canonical onboarding suite: /app/backend/tests/test_onboarding.py (13 tests, one class TestOnboardingE2E). Run with `-n 0` OR alone (do NOT co-run with test_sec001_seed_flow.py because loadscope will assign them to two workers that both mutate the shared admin doc). conftest.py restore now also $unsets onboarding_dismissed/visited_scan/visited_report and purges ONB_-prefixed students. Admin state always restored to ChangeMe#Adm1n2026 + force_password_change=true at session teardown. Legacy tests referencing aarav/diya/rohan still exist in /app/backend/tests/ but were NOT run per iteration 9 charter.",
+  "rca of the issue": "Not a bug fix — feature validation. Verified end-to-end: (i) /onboarding/status returns the exact spec shape {dismissed, steps[5], completed, total:5} with keys add_student/enroll_face/visit_scan/first_attendance/visit_report; (ii) admin-only enforcement (401 anon, 403 student); (iii) each of the 5 steps completes via its correct trigger — POST /students, POST /students/{id}/face, POST /onboarding/visit visit_scan, POST /face/recognize creating an attendance row, POST /onboarding/visit visit_report; (iv) unknown step -> 400; (v) auto-dismiss inside GET when completed==total (persisted); (vi) explicit POST /onboarding/dismiss is idempotent; (vii) force_password_change gate remains active. No breakage to /students CRUD, /face/recognize, /face/mark-self, or SEC-003 biometric-leak guards."
+}

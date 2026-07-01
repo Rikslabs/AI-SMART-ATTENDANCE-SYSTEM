@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="15" time="86.957" timestamp="2026-07-01T17:23:24.160320+00:00" hostname="agent-env-dab616dd-92ff-4f90-9937-6aa91d108d84"><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_01_admin_login_with_env_credentials_succeeds" time="0.596" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_02_old_hardcoded_admin_password_rejected" time="0.330" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_03_old_sample_student_login_rejected" time="0.114" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_04_students_list_has_no_seed_students" time="1.223" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_05_seed_guard_missing_both_env_vars_raises_runtime_error" time="0.876" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_06_seed_guard_missing_password_only_raises" time="0.886" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_07_seed_guard_weak_password_raises" time="0.880" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_08_scratch_db_cleanup" time="0.001" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_09_admin_forced_change_lifecycle" time="2.021" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_10_student_created_is_force_pw_gated" time="3.047" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_11_face_enroll_mark_self_and_impersonation" time="61.042"><failure message="requests.exceptions.ConnectTimeout: HTTPSConnectionPool(host='smartcheck-ai-2.preview.emergentagent.com', port=443): Max retries exceeded with url: /api/students (Caused by ConnectTimeoutError(&lt;HTTPSConnection(host='smartcheck-ai-2.preview.emergentagent.com', port=443) at 0xfc5c41d9f010&gt;, 'Connection to smartcheck-ai-2.preview.emergentagent.com timed out. (connect timeout=30)'))">/root/.venv/lib/python3.11/site-packages/urllib3/connection.py:204: in _new_conn
+    sock = connection.create_connection(
+/root/.venv/lib/python3.11/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+/root/.venv/lib/python3.11/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+E   TimeoutError: timed out
+
+The above exception was the direct cause of the following exception:
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:788: in urlopen
+    response = self._make_request(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:488: in _make_request
+    raise new_e
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:464: in _make_request
+    self._validate_conn(conn)
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:1106: in _validate_conn
+    conn.connect()
+/root/.venv/lib/python3.11/site-packages/urllib3/connection.py:759: in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/connection.py:213: in _new_conn
+    raise ConnectTimeoutError(
+E   urllib3.exceptions.ConnectTimeoutError: (&lt;HTTPSConnection(host='smartcheck-ai-2.preview.emergentagent.com', port=443) at 0xfc5c41d9f010&gt;, 'Connection to smartcheck-ai-2.preview.emergentagent.com timed out. (connect timeout=30)')
+
+The above exception was the direct cause of the following exception:
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:696: in send
+    resp = conn.urlopen(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:842: in urlopen
+    retries = retries.increment(
+/root/.venv/lib/python3.11/site-packages/urllib3/util/retry.py:543: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='smartcheck-ai-2.preview.emergentagent.com', port=443): Max retries exceeded with url: /api/students (Caused by ConnectTimeoutError(&lt;HTTPSConnection(host='smartcheck-ai-2.preview.emergentagent.com', port=443) at 0xfc5c41d9f010&gt;, 'Connection to smartcheck-ai-2.preview.emergentagent.com timed out. (connect timeout=30)'))
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_sec001_seed_flow.py:266: in test_11_face_enroll_mark_self_and_impersonation
+    sb = _mk_student(admin_token, f"faceB_{suf}")
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_sec001_seed_flow.py:131: in _mk_student
+    r = requests.post(f"{API}/students", headers=_bearer(admin_tok), json=payload, timeout=30)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:134: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:71: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:651: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:784: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:717: in send
+    raise ConnectTimeout(e, request=request)
+E   requests.exceptions.ConnectTimeout: HTTPSConnectionPool(host='smartcheck-ai-2.preview.emergentagent.com', port=443): Max retries exceeded with url: /api/students (Caused by ConnectTimeoutError(&lt;HTTPSConnection(host='smartcheck-ai-2.preview.emergentagent.com', port=443) at 0xfc5c41d9f010&gt;, 'Connection to smartcheck-ai-2.preview.emergentagent.com timed out. (connect timeout=30)'))</failure></testcase><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_12_face_recognize_admin_only" time="14.202" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_13_attendance_filters" time="0.320" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_14_csv_export" time="0.123" /><testcase classname="tests.test_sec001_seed_flow.TestSEC001E2E" name="test_15_no_face_image_in_any_endpoint" time="1.128" /></testsuite></testsuites>
