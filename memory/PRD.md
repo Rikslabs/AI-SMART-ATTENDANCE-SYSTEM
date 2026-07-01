@@ -40,3 +40,24 @@ The problem statement asked for Django + SQLite + dlib. To be practical in the c
 ## Next Action Items
 - Run testing_agent_v3 for end-to-end backend flows
 - If desired, add course-wise report filtering and per-student attendance graphs
+
+## Security Hardening (2026-07-01, Demo-friendly pass)
+Applied the following in response to the security audit:
+- **SEC-002**: `/api/face/recognize` now requires JWT auth (`Depends(current_user)`).
+- **SEC-003**: `/api/students` list is now admin-only via `Depends(require_admin)`. Students can still access `/api/students/{id}` for their own record and `/api/attendance/me/stats`.
+- **SEC-004**: `JWT_SECRET` hard-coded fallback removed. `server.py` now reads `os.environ["JWT_SECRET"]` and fails fast if missing. Value is stored in `/app/backend/.env`.
+- **SEC-005**: All user-controlled inputs to Mongo `$regex` queries (`search`, `month`) are wrapped with `re.escape()`.
+- **Login UI**: Removed public demo credentials block and pre-filled inputs.
+
+## Setup Instructions (Local)
+Required env vars in `backend/.env`:
+```
+MONGO_URL="mongodb://localhost:27017"
+DB_NAME="attendance_db"
+CORS_ORIGINS="*"
+JWT_SECRET="<generate with: python -c 'import secrets;print(secrets.token_urlsafe(48))'>"
+```
+Frontend `frontend/.env`:
+```
+REACT_APP_BACKEND_URL="<your backend URL>"
+```
