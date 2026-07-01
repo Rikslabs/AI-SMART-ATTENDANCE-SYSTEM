@@ -160,12 +160,13 @@ class TestFace:
     descriptor = _rand_desc(seed=42)
     target_sid = None
 
-    def test_enroll_requires_admin(self, s, student_headers):
-        # Use a seeded student's id via list
-        r = s.get(f"{API}/students", headers=student_headers, timeout=20)
+    def test_enroll_requires_admin(self, s, admin_headers, student_headers):
+        # Use admin to list (SEC-003 blocks student). Cache target_sid.
+        r = s.get(f"{API}/students", headers=admin_headers, timeout=20)
         assert r.status_code == 200
         sid = [x for x in r.json() if x["roll_number"] == "BCA2101"][0]["id"]
         TestFace.target_sid = sid
+        # student token should be forbidden on enroll
         r = s.post(f"{API}/students/{sid}/face", json={"descriptor": self.descriptor},
                    headers=student_headers, timeout=20)
         assert r.status_code == 403
@@ -191,8 +192,9 @@ class TestFace:
         assert r.status_code == 400
 
     def test_recognize_match_and_dedupe(self, s, admin_headers):
-        # First cleanup today's attendance for target (via delete-recreate not available; rely on dedupe test)
-        r1 = s.post(f"{API}/face/recognize", json={"descriptor": self.descriptor}, timeout=30)
+        # SEC-002: /api/face/recognize now requires auth
+        r1 = s.post(f"{API}/face/recognize", json={"descriptor": self.descriptor},
+                    headers=admin_headers, timeout=30)
         assert r1.status_code == 200, r1.text
         b1 = r1.json()
         assert b1["matched"] is True
@@ -200,16 +202,18 @@ class TestFace:
         # already_marked may be True if previous test run created one; both are valid successes.
 
         # Second call must dedupe
-        r2 = s.post(f"{API}/face/recognize", json={"descriptor": self.descriptor}, timeout=30)
+        r2 = s.post(f"{API}/face/recognize", json={"descriptor": self.descriptor},
+                    headers=admin_headers, timeout=30)
         assert r2.status_code == 200
         b2 = r2.json()
         assert b2["matched"] is True
         assert b2["already_marked"] is True
 
-    def test_recognize_unmatched(self, s):
+    def test_recognize_unmatched(self, s, admin_headers):
         # Use a very different descriptor (all large positive) far from enrolled random-uniform vector
         far = [5.0] * 128
-        r = s.post(f"{API}/face/recognize", json={"descriptor": far}, timeout=30)
+        r = s.post(f"{API}/face/recognize", json={"descriptor": far},
+                   headers=admin_headers, timeout=30)
         assert r.status_code == 200
         assert r.json()["matched"] is False
 

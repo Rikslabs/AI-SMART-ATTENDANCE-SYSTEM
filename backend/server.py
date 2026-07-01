@@ -12,7 +12,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-import os, io, csv, math, uuid, logging
+import os, io, csv, math, uuid, logging, re
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional
@@ -26,7 +26,8 @@ load_dotenv(ROOT_DIR / ".env")
 # ---------- Configuration ----------
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
-JWT_SECRET = os.environ.get("JWT_SECRET", "smart-attendance-secret-key-change-me")
+# SEC-004: JWT_SECRET must be provided via environment; fail fast if missing.
+JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALGO = "HS256"
 JWT_EXPIRE_HOURS = 24 * 7
 FACE_MATCH_THRESHOLD = float(os.environ.get("FACE_MATCH_THRESHOLD", "0.55"))
@@ -135,7 +136,7 @@ async def me(user: dict = Depends(current_user)):
 
 # ---------- Student Routes (Admin) ----------
 @api.get("/students")
-async def list_students(user: dict = Depends(current_user)):
+async def list_students(_: dict = Depends(require_admin)):
     students = await db.students.find({}, {"_id": 0, "face_descriptor": 0}).sort("created_at", -1).to_list(1000)
     return students
 
@@ -228,7 +229,7 @@ async def enroll_face(sid: str, payload: FaceEnrollIn, _: dict = Depends(require
 
 # ---------- Face Recognition ----------
 @api.post("/face/recognize")
-async def face_recognize(payload: FaceRecognizeIn):
+async def face_recognize(payload: FaceRecognizeIn, _: dict = Depends(current_user)):
     if len(payload.descriptor) < 64:
         raise HTTPException(status_code=400, detail="Invalid descriptor")
     cursor = db.students.find({"face_enrolled": True}, {"_id": 0})
@@ -297,11 +298,14 @@ async def list_attendance(
     if date_filter:
         q["date"] = date_filter
     elif month:
-        q["date"] = {"$regex": f"^{month}"}
+        # SEC-005: escape user-controlled regex input
+        q["date"] = {"$regex": f"^{re.escape(month)}"}
     if search:
+        # SEC-005: escape user-controlled regex input
+        safe = re.escape(search)
         q["$or"] = [
-            {"student_name": {"$regex": search, "$options": "i"}},
-            {"roll_number": {"$regex": search, "$options": "i"}},
+            {"student_name": {"$regex": safe, "$options": "i"}},
+            {"roll_number": {"$regex": safe, "$options": "i"}},
         ]
     rows = await db.attendance.find(q, {"_id": 0}).sort("time", -1).to_list(limit)
     return rows
@@ -352,7 +356,8 @@ async def export_csv(
     if date_filter:
         q["date"] = date_filter
     elif month:
-        q["date"] = {"$regex": f"^{month}"}
+        # SEC-005: escape user-controlled regex input
+        q["date"] = {"$regex": f"^{re.escape(month)}"}
     rows = await db.attendance.find(q, {"_id": 0}).sort("time", -1).to_list(10000)
     buf = io.StringIO()
     writer = csv.writer(buf)

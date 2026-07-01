@@ -8,14 +8,14 @@ export default function LoginPage() {
   const { login } = useAuth();
   const nav = useNavigate();
   const [tab, setTab] = useState("admin");
-  const [email, setEmail] = useState("admin@college.edu");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const switchTab = (t) => {
     setTab(t);
-    if (t === "admin") { setEmail("admin@college.edu"); setPassword("admin123"); }
-    else { setEmail("aarav@college.edu"); setPassword("student123"); }
+    setEmail("");
+    setPassword("");
   };
 
   const submit = async (e) => {
@@ -121,10 +121,9 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 p-4 border border-dashed border-[var(--sa-border)] rounded-md">
-            <div className="text-xs font-mono-tech uppercase tracking-widest text-[var(--sa-muted)] mb-2">Demo Credentials</div>
-            <div className="text-xs font-mono-tech text-[var(--sa-text)] space-y-1">
-              <div>Admin: <span className="text-[var(--sa-primary)]">admin@college.edu / admin123</span></div>
-              <div>Student: <span className="text-[var(--sa-primary)]">aarav@college.edu / student123</span></div>
+            <div className="text-xs font-mono-tech uppercase tracking-widest text-[var(--sa-muted)] mb-2">Access</div>
+            <div className="text-xs text-[var(--sa-muted)]">
+              Contact your administrator if you don&apos;t have login credentials.
             </div>
           </div>
         </div>
