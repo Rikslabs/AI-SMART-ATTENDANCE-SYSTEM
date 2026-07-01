@@ -1,0 +1,93 @@
+{
+  "project_name": "AI Smart Attendance System",
+  "theme": "Light",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "vibe": "Authority, Clarity, Truth. Objective, rigid, functional.",
+  "colors": {
+    "background": "#FFFFFF",
+    "surface": "#F9FAFB",
+    "surface_alt": "#F3F4F6",
+    "border": "#E5E7EB",
+    "primary": "#0033CC",
+    "primary_hover": "#002699",
+    "text_main": "#0A0A0A",
+    "text_muted": "#6B7280",
+    "success": "#10B981",
+    "danger": "#EF4444",
+    "warning": "#F59E0B"
+  },
+  "typography": {
+    "font_family_headings": "Manrope, sans-serif",
+    "font_family_body": "Figtree, sans-serif",
+    "font_family_mono": "IBM Plex Mono, monospace",
+    "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-extrabold text-[#0A0A0A]",
+    "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold text-[#0A0A0A]",
+    "h3": "text-xl sm:text-2xl tracking-tight font-semibold text-[#0A0A0A]",
+    "h4": "text-lg sm:text-xl font-medium text-[#0A0A0A]",
+    "body": "text-base text-[#4B5563] leading-relaxed",
+    "small_label": "text-xs tracking-[0.1em] uppercase font-bold text-[#6B7280]"
+  },
+  "spacing_and_layout": {
+    "container_padding": "p-6 md:p-10 lg:p-12",
+    "gap_standard": "gap-6",
+    "gap_large": "gap-12",
+    "dashboard_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+    "card_padding": "p-6"
+  },
+  "surface_strategies": {
+    "dashboard_cards": "Flat background (bg-[#F9FAFB]), 1px sharp border (border-[#E5E7EB]), no shadow. On hover: shadow-sm border-[#D1D5DB].",
+    "camera_module": "Technical grid look. border-collapse with scanning line animation over the camera feed. Stark black borders for the video container to emphasize functionality.",
+    "tables": "Minimalist borders. Row borders only (border-b), no vertical borders. hover:bg-[#F3F4F6]."
+  },
+  "components": {
+    "buttons": "Square or very slightly rounded (rounded-md). High contrast. Primary: bg-[#0033CC] text-white hover:bg-[#002699]. Secondary: bg-transparent border border-[#E5E7EB] text-[#0A0A0A] hover:bg-[#F9FAFB].",
+    "inputs": "Flat, rounded-md, border border-[#E5E7EB] bg-white focus:ring-2 focus:ring-[#0033CC] focus:border-transparent text-[#0A0A0A].",
+    "sidebar": "Clean, light grey (bg-[#F9FAFB]) with dark text for active states. 1px border-r border-[#E5E7EB]."
+  },
+  "icons_library": {
+    "name": "@phosphor-icons/react",
+    "install_command": "yarn add @phosphor-icons/react",
+    "usage": "Use Duotone weight for marketing/empty states, Regular or Bold for dense dashboard UI."
+  },
+  "media": {
+    "images": [
+      {
+        "category": "hero_login_background",
+        "url": "https://images.unsplash.com/photo-1641160616553-a9d21a846e49?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwzfHx1bml2ZXJzaXR5JTIwY2FtcHVzJTIwYnVpbGRpbmd8ZW58MHx8fHwxNzgyOTE5MzA1fDA&ixlib=rb-4.1.0&q=85",
+        "description": "University campus building. Use as a subtle, low-opacity background or side-panel image on the login page."
+      },
+      {
+        "category": "empty_state_illustration",
+        "url": "https://images.pexels.com/photos/19193975/pexels-photo-19193975.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Modern university building with trees. Useful for generic dashboard empty states or welcome banners."
+      },
+      {
+        "category": "student_avatar_placeholder_1",
+        "url": "https://images.pexels.com/photos/6256231/pexels-photo-6256231.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Portrait of a student. Use as a placeholder for student profile or face recognition mockups."
+      },
+      {
+        "category": "student_avatar_placeholder_2",
+        "url": "https://images.pexels.com/photos/13538613/pexels-photo-13538613.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Portrait of a younger student. Use as a placeholder for student profile or list views."
+      }
+    ]
+  },
+  "animations": {
+    "hover_states": "Quick, snappy transitions: transition-all duration-200 ease-in-out.",
+    "page_transitions": "Subtle fade in for data tables and dashboard cards to reduce cognitive load.",
+    "camera_scan": "Use framer-motion to create a green (success) or blue (scanning) horizontal line that moves vertically across the video feed overlay to simulate AI face scanning."
+  },
+  "accessibility": {
+    "contrast": "Ensure all text against white/grey backgrounds meets 4.5:1 ratio.",
+    "data_testid": "MANDATORY. Add data-testid to all interactive elements, e.g., data-testid='admin-login-button', data-testid='sidebar-nav-students'."
+  },
+  "instructions_to_main_agent": [
+    "Build standard Shadcn components but override generic styles with the colors and typography specified here.",
+    "Avoid card heavy layouts. Emphasize data clarity using borders and spacing instead of heavy shadows or rounded rectangles.",
+    "The Live Camera Face Recognition page should look highly technical. Use a dark or stark black container for the webcam feed, overlaid with a scanning line animation.",
+    "Use Manrope for headings and Figtree for body text. IBM Plex Mono for numbers, stats, and timestamps to give a technical 'AI' feel.",
+    "Include data-testids on EVERY button, input, and navigation link.",
+    "All navigation must be a sidebar (bg-[#F9FAFB]) with clear active state indicators (e.g., text-[#0033CC] and a left border highlight)."
+  ]
+}
