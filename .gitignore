@@ -80,3 +80,10 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/
+# Environment files
+.env
+.env.*
+!.env.example
+
+backend/.env
+frontend/.envfrontend/node_modules/.cache/default-development/0.pack
